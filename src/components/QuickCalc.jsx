@@ -243,7 +243,7 @@ export default function QuickCalc() {
                           {day.calc.totalPackages} Pkt
                         </span>
                         <span style={{ fontSize: '0.6rem', color: 'var(--success)' }}>
-                          {formatCurrency(day.calc.dailyTotalNet * (1 + vatRate / 100) - (day.calc.dailyTotalNet * vatRate / 100 * withholdingRate / 100))}
+                          {formatCurrency(day.calc.dailyTotalNet)}
                         </span>
                       </div>
                     )}

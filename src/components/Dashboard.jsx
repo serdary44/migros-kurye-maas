@@ -358,7 +358,7 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
                           {day.calc.totalPackages} Pkt
                         </span>
                         <span style={{ fontSize: '0.65rem', color: 'var(--success)' }}>
-                          {formatCurrency(day.calc.dailyTotalNet * (1 + selectedCourier.vat_rate / 100) - (day.calc.dailyTotalNet * selectedCourier.vat_rate / 100 * selectedCourier.withholding_rate / 100))}
+                          {formatCurrency(day.calc.dailyTotalNet)}
                         </span>
                         {day.calc.totalDailyExpense > 0 && (
                           <span style={{ fontSize: '0.65rem', color: '#ef4444' }}>
