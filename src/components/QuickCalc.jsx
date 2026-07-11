@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react';
-import { calculateFromMonthlyAverages } from '../utils/calculator.js';
+import React, { useState, useMemo, useEffect } from 'react';
+import { calculateMonthlyTotals, calculateDailyLog } from '../utils/calculator.js';
 import { 
   DEFAULT_HOURLY_RATE, 
   DEFAULT_SENIORITY_SUPPORT, 
@@ -10,44 +10,49 @@ import {
 } from '../utils/constants.js';
 
 export default function QuickCalc() {
-  // Input states (initialized empty as requested by user)
-  const [daysWorked, setDaysWorked] = useState('');
-  const [totalHours, setTotalHours] = useState('');
+  const [currentDate, setCurrentDate] = useState(new Date());
   
-  // Package inputs
-  const [marketPackages, setMarketPackages] = useState(''); // Normal packages (Market + Yemek 0-4 Km)
+  // Local logs state (not saved in database, purely in memory for quick calculation)
+  const [localLogs, setLocalLogs] = useState([]);
+  
+  // Selected calendar day states
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [hoursWorked, setHoursWorked] = useState('');
+  const [marketPackages, setMarketPackages] = useState('');
   const [food4_6, setFood4_6] = useState('');
   const [food6plus, setFood6plus] = useState('');
-  const [extraPremiumsInput, setExtraPremiumsInput] = useState('');
-  
-  // Configuration inputs
-  const [showConfig, setShowConfig] = useState(false);
-  const [hourlyRate, setHourlyRate] = useState(DEFAULT_HOURLY_RATE);
-  const [senioritySupport, setSenioritySupport] = useState(DEFAULT_SENIORITY_SUPPORT);
-  const [reliefFund, setReliefFund] = useState(DEFAULT_RELIEF_FUND);
-  const [duesInstallments, setDuesInstallments] = useState(DEFAULT_DUES_INSTALLMENTS);
-  const [vatRate, setVatRate] = useState(DEFAULT_VAT_RATE);
-  const [withholdingRate, setWithholdingRate] = useState(DEFAULT_WITHHOLDING_RATE);
 
-  // Document metadata states for receipt styling
-  const [workingYear, setWorkingYear] = useState('2');
-  const [startDate, setStartDate] = useState('04.2024');
-  const [region, setRegion] = useState('ANKARA');
-  const [customer, setCustomer] = useState('HEMEN');
-  const [vehicle, setVehicle] = useState('HONDA');
-  const [invoiceNote, setInvoiceNote] = useState('HAZİRAN MOTOR HAK EDİŞ BEDELİ');
-  const [invoiceNote2, setInvoiceNote2] = useState('eren.atasever@pakettaxi.com.tr');
+  // Fixed default settings (June 2026 rates)
+  const hourlyRate = DEFAULT_HOURLY_RATE;
+  const senioritySupport = DEFAULT_SENIORITY_SUPPORT;
+  const reliefFund = DEFAULT_RELIEF_FUND;
+  const duesInstallments = DEFAULT_DUES_INSTALLMENTS;
+  const vatRate = DEFAULT_VAT_RATE;
+  const withholdingRate = DEFAULT_WITHHOLDING_RATE;
 
-  // Memoized calculations
+  // Metadata for the receipt preview (June 2026 defaults)
+  const workingYear = '2';
+  const startDate = '04.2024';
+  const region = 'ANKARA';
+  const customer = 'HEMEN';
+  const vehicle = 'HONDA';
+  const invoiceNote = 'HAZİRAN MOTOR HAK EDİŞ BEDELİ';
+  const invoiceNote2 = 'eren.atasever@pakettaxi.com.tr';
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const monthYearStr = currentDate.toLocaleString('tr-TR', { month: 'long', year: 'numeric' });
+
+  // Filter local logs for selected month
+  const filteredLogs = useMemo(() => {
+    return localLogs.filter(log => {
+      const logDate = new Date(log.log_date);
+      return logDate.getFullYear() === year && logDate.getMonth() === month;
+    });
+  }, [localLogs, year, month]);
+
+  // Calculate totals
   const results = useMemo(() => {
-    const monthlyData = {
-      days_worked: parseInt(daysWorked) || 0,
-      total_hours: parseFloat(totalHours) || 0,
-      market_packages: parseInt(marketPackages) || 0,
-      food_packages_4_6: parseInt(food4_6) || 0,
-      food_packages_6plus: parseInt(food6plus) || 0
-    };
-
     const settings = {
       hourly_rate: hourlyRate,
       seniority_support: senioritySupport,
@@ -55,20 +60,93 @@ export default function QuickCalc() {
       dues_installments: duesInstallments,
       vat_rate: vatRate,
       withholding_rate: withholdingRate,
-      monthly_extra_premiums: parseFloat(extraPremiumsInput) || 0
+      monthly_extra_premiums: 0
+    };
+    return calculateMonthlyTotals(filteredLogs, settings);
+  }, [filteredLogs]);
+
+  // Calendar calculations
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const adjustedFirstDayIndex = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+  const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Days list
+  const days = [];
+  for (let i = 0; i < adjustedFirstDayIndex; i++) {
+    days.push({ empty: true });
+  }
+  for (let i = 1; i <= totalDaysInMonth; i++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    const dayLog = filteredLogs.find(log => log.log_date === dateStr);
+    
+    let calc = null;
+    if (dayLog) {
+      calc = calculateDailyLog(dayLog, hourlyRate, undefined, vatRate);
+    }
+
+    days.push({
+      dayNumber: i,
+      dateStr,
+      log: dayLog,
+      calc
+    });
+  }
+
+  const handleDayClick = (day) => {
+    if (day.empty) return;
+    setSelectedDay(day);
+
+    if (day.log) {
+      setHoursWorked(day.log.hours_worked ?? '');
+      setMarketPackages(day.log.market_packages ?? '');
+      setFood4_6(day.log.food_packages_4_6 ?? '');
+      setFood6plus(day.log.food_packages_6plus ?? '');
+    } else {
+      setHoursWorked('');
+      setMarketPackages('');
+      setFood4_6('');
+      setFood6plus('');
+    }
+  };
+
+  const handleSaveLocalLog = (e) => {
+    e.preventDefault();
+    if (!selectedDay) return;
+
+    const logData = {
+      log_date: selectedDay.dateStr,
+      hours_worked: parseFloat(hoursWorked) || 0,
+      market_packages: parseInt(marketPackages) || 0,
+      food_packages_4_6: parseInt(food4_6) || 0,
+      food_packages_6plus: parseInt(food6plus) || 0,
+      fuel_expense: 0,
+      motor_lease_expense: 0
     };
 
-    return calculateFromMonthlyAverages(monthlyData, settings);
-  }, [
-    daysWorked, totalHours, extraPremiumsInput,
-    marketPackages, food4_6, food6plus,
-    hourlyRate, senioritySupport, reliefFund, duesInstallments,
-    vatRate, withholdingRate
-  ]);
+    setLocalLogs(prev => {
+      const filtered = prev.filter(log => log.log_date !== selectedDay.dateStr);
+      return [...filtered, logData];
+    });
 
-  const totalPackages = (parseInt(marketPackages) || 0) + (parseInt(food4_6) || 0) + (parseInt(food6plus) || 0);
+    setSelectedDay(null);
+  };
 
-  // Format helper
+  const handleDeleteLocalLog = () => {
+    if (!selectedDay) return;
+    setLocalLogs(prev => prev.filter(log => log.log_date !== selectedDay.dateStr));
+    setSelectedDay(null);
+  };
+
+  const prevMonth = () => {
+    setCurrentDate(new Date(year, month - 1, 1));
+    setSelectedDay(null);
+  };
+
+  const nextMonth = () => {
+    setCurrentDate(new Date(year, month + 1, 1));
+    setSelectedDay(null);
+  };
+
   const formatCurrency = (val) => {
     return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val || 0);
   };
@@ -80,220 +158,185 @@ export default function QuickCalc() {
           Hızlı Maaş Hesaplama Paneli
         </h2>
         <p style={{ color: 'var(--text-muted)' }}>
-          Giriş yapmadan, sadece bu ayki toplam verilerinizi girerek KDV, Tevkifat ve tüm kesintiler sonrası banka hesabınıza yatacak net ücreti faturanızla birebir formatta hesaplayın.
+          Giriş yapmadan ve sisteme kaydetmeden, sadece takvimden günlerinizi doldurarak KDV, Tevkifat sonrası hak ediş dökümünüzü canlı olarak hesaplayın.
         </p>
       </div>
 
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr', gap: '2rem' }}>
-        {/* Left Column: Inputs */}
+        {/* Left Column: Local Calendar Grid & Selected Day Edit Form */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          <div className="glass-card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ color: 'var(--primary)' }}>🕒</span> Mesai & Çalışma Günleri
-            </h3>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Çalışılan Gün Sayısı</label>
-                <input 
-                  type="number" 
-                  className="glass-input" 
-                  value={daysWorked}
-                  onChange={(e) => setDaysWorked(e.target.value)}
-                  placeholder="Örn: 26"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Online Süre (Saat)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  className="glass-input" 
-                  value={totalHours}
-                  onChange={(e) => setTotalHours(e.target.value)}
-                  placeholder="Örn: 296.66"
-                />
+          {/* Calendar Grid */}
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--primary)', margin: 0 }}>
+                📅 Hesaplama Takvimi
+              </h3>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button onClick={prevMonth} className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}>◄ Önceki</button>
+                <span style={{ fontWeight: 600, fontSize: '0.85rem' }}>{monthYearStr}</span>
+                <button onClick={nextMonth} className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.8rem' }}>Sonraki ►</button>
               </div>
             </div>
 
-            <div style={{ marginTop: '0.5rem' }}>
-              <div className="form-group">
-                <label className="form-label">Aylık Diğer Primler (TL)</label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  className="glass-input" 
-                  value={extraPremiumsInput}
-                  onChange={(e) => setExtraPremiumsInput(e.target.value)}
-                  placeholder="Örn: 500"
-                />
-              </div>
+            {/* Days of week header */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.8rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>
+              <div>Pzt</div>
+              <div>Sal</div>
+              <div>Çar</div>
+              <div>Per</div>
+              <div>Cum</div>
+              <div>Cmt</div>
+              <div>Paz</div>
             </div>
-          </div>
 
-          <div className="glass-card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{ color: 'var(--primary)' }}>📦</span> Dağıtılan Paketler
-            </h3>
+            {/* Calendar items */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.5rem' }}>
+              {days.map((day, index) => {
+                if (day.empty) {
+                  return <div key={`empty-${index}`} style={{ aspectRatio: '1.2', opacity: 0 }}></div>;
+                }
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div className="form-group">
-                <label className="form-label">Normal Paketler (Market + Yemek 0-4 Km)</label>
-                <input 
-                  type="number" 
-                  className="glass-input" 
-                  value={marketPackages}
-                  onChange={(e) => setMarketPackages(e.target.value)}
-                  placeholder="Normal Sipariş Toplamı (Örn: 1024)"
-                />
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                  Yemek 0-4 Km paketleri normal market paketi gibi hesaplandığından buraya dahil edilmelidir.
-                </span>
-              </div>
+                const isLogged = !!day.log;
+                const isSelected = selectedDay && selectedDay.dateStr === day.dateStr;
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Yemek (4-6 Km)</span>
-                    <span style={{ color: 'var(--success)' }}>+25 TL/pkt</span>
-                  </label>
-                  <input 
-                    type="number" 
-                    className="glass-input" 
-                    value={food4_6}
-                    onChange={(e) => setFood4_6(e.target.value)}
-                    placeholder="Örn: 22"
-                  />
-                </div>
+                let background = 'rgba(255, 255, 255, 0.02)';
+                let border = '1px solid var(--border-light)';
+                if (isLogged) {
+                  background = 'rgba(249, 115, 22, 0.05)';
+                  border = '1px solid rgba(249, 115, 22, 0.3)';
+                }
+                if (isSelected) {
+                  border = '2px solid var(--primary)';
+                  background = 'rgba(249, 115, 22, 0.15)';
+                }
 
-                <div className="form-group">
-                  <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Yemek (+6 Km)</span>
-                    <span style={{ color: 'var(--success)' }}>+35 TL/pkt</span>
-                  </label>
-                  <input 
-                    type="number" 
-                    className="glass-input" 
-                    value={food6plus}
-                    onChange={(e) => setFood6plus(e.target.value)}
-                    placeholder="Örn: 2"
-                  />
-                </div>
-              </div>
+                return (
+                  <div 
+                    key={day.dateStr}
+                    onClick={() => handleDayClick(day)}
+                    style={{
+                      aspectRatio: '1.2',
+                      padding: '0.4rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background,
+                      border,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      transition: 'all 0.2s ease',
+                    }}
+                    className="calendar-day"
+                  >
+                    <span style={{ 
+                      fontWeight: 700, 
+                      fontSize: '0.85rem',
+                      color: isLogged ? 'var(--text-main)' : 'var(--text-muted)'
+                    }}>
+                      {day.dayNumber}
+                    </span>
+                    
+                    {isLogged && day.calc && (
+                      <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--primary)' }}>
+                          {day.calc.totalPackages} Pkt
+                        </span>
+                        <span style={{ fontSize: '0.6rem', color: 'var(--success)' }}>
+                          {formatCurrency(day.calc.dailyTotalNet * (1 + vatRate / 100) - (day.calc.dailyTotalNet * vatRate / 100 * withholdingRate / 100))}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Settings Section */}
-          <div className="glass-card">
-            <button 
-              onClick={() => setShowConfig(!showConfig)}
-              className="btn btn-secondary" 
-              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <span>⚙️ Fatura Parametreleri ve Notları</span>
-              <span>{showConfig ? '▲' : '▼'}</span>
-            </button>
+          {/* Edit day form card */}
+          <div className="glass-card" style={{ padding: '1.5rem', minHeight: '120px' }}>
+            {selectedDay ? (
+              <div>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.5rem' }}>
+                  ✏️ {selectedDay.dateStr} Çalışma Detayları
+                </h3>
 
-            {showConfig && (
-              <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border-light)', paddingTop: '1.25rem' }}>
-                
-                <h4 style={{ color: 'var(--primary-glow)', margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>Fatura Notları & Bilgileri</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Çalışma Yılı / Giriş Tarihi</label>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <input type="text" className="glass-input" value={workingYear} onChange={(e) => setWorkingYear(e.target.value)} style={{ width: '60px' }} />
-                      <input type="text" className="glass-input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                <form onSubmit={handleSaveLocalLog} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label">Çalışılan Süre (Saat)</label>
+                      <input 
+                        type="number" 
+                        step="0.5"
+                        className="glass-input" 
+                        value={hoursWorked}
+                        onChange={(e) => setHoursWorked(e.target.value)}
+                        placeholder="Saat Girin"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Normal Paketler (Market + Yemek 0-4 Km)</label>
+                      <input 
+                        type="number" 
+                        className="glass-input" 
+                        value={marketPackages}
+                        onChange={(e) => setMarketPackages(e.target.value)}
+                        placeholder="Normal Paket Sayısı"
+                      />
                     </div>
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Bölge / Araç / Müşteri</label>
-                    <div style={{ display: 'flex', gap: '0.25rem' }}>
-                      <input type="text" className="glass-input" value={region} onChange={(e) => setRegion(e.target.value)} placeholder="ANKARA" />
-                      <input type="text" className="glass-input" value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="HONDA" style={{ width: '80px' }} />
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Yemek (4-6 Km)</span>
+                        <span style={{ color: 'var(--success)' }}>+25 TL/pkt</span>
+                      </label>
+                      <input 
+                        type="number" 
+                        className="glass-input" 
+                        value={food4_6}
+                        onChange={(e) => setFood4_6(e.target.value)}
+                        placeholder="Örn: 22"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Yemek (+6 Km)</span>
+                        <span style={{ color: 'var(--success)' }}>+35 TL/pkt</span>
+                      </label>
+                      <input 
+                        type="number" 
+                        className="glass-input" 
+                        value={food6plus}
+                        onChange={(e) => setFood6plus(e.target.value)}
+                        placeholder="Örn: 2"
+                      />
                     </div>
                   </div>
-                </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Fatura Notu 1</label>
-                    <input type="text" className="glass-input" value={invoiceNote} onChange={(e) => setInvoiceNote(e.target.value)} />
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                    <button type="submit" className="btn btn-primary" style={{ flex: 2 }}>
+                      Hesaplamaya Ekle
+                    </button>
+                    {selectedDay.log && (
+                      <button 
+                        type="button" 
+                        onClick={handleDeleteLocalLog} 
+                        className="btn btn-secondary" 
+                        style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                      >
+                        Sil
+                      </button>
+                    )}
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Fatura Notu 2</label>
-                    <input type="text" className="glass-input" value={invoiceNote2} onChange={(e) => setInvoiceNote2(e.target.value)} />
-                  </div>
-                </div>
-
-                <h4 style={{ color: 'var(--primary-glow)', margin: '0.5rem 0 0.5rem 0', fontSize: '0.9rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>Oran ve Kesinti Ayarları</h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Saatlik Ücret (TL)</label>
-                    <input 
-                      type="number" 
-                      className="glass-input" 
-                      value={hourlyRate}
-                      onChange={(e) => setHourlyRate(Math.max(0, parseFloat(e.target.value) || 0))}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Kıdem Desteği (TL)</label>
-                    <input 
-                      type="number" 
-                      className="glass-input" 
-                      value={senioritySupport}
-                      onChange={(e) => setSenioritySupport(Math.max(0, parseFloat(e.target.value) || 0))}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">Yardım Fonu (Kesinti)</label>
-                    <input 
-                      type="number" 
-                      className="glass-input" 
-                      value={reliefFund}
-                      onChange={(e) => setReliefFund(Math.max(0, parseFloat(e.target.value) || 0))}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Aidat & Taksit (Kesinti)</label>
-                    <input 
-                      type="number" 
-                      className="glass-input" 
-                      value={duesInstallments}
-                      onChange={(e) => setDuesInstallments(Math.max(0, parseFloat(e.target.value) || 0))}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                  <div className="form-group">
-                    <label className="form-label">KDV Oranı (%)</label>
-                    <input 
-                      type="number" 
-                      className="glass-input" 
-                      value={vatRate}
-                      onChange={(e) => setVatRate(Math.max(0, parseFloat(e.target.value) || 0))}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Tevkifat Oranı (%)</label>
-                    <input 
-                      type="number" 
-                      className="glass-input" 
-                      value={withholdingRate}
-                      onChange={(e) => setWithholdingRate(Math.max(0, parseFloat(e.target.value) || 0))}
-                    />
-                  </div>
-                </div>
+                </form>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', color: 'var(--text-muted)', padding: '1rem 0' }}>
+                <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>👈</span>
+                <p style={{ fontSize: '0.9rem' }}>Çalışma saati ve paket girmek için soldaki takvimden bir gün seçin.</p>
               </div>
             )}
           </div>
@@ -357,22 +400,22 @@ export default function QuickCalc() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
                   <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Paket Sayısı</span>
                   <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{totalPackages}</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.totalPackages}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Çalışma Gün Sayısı</span>
                   <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked || 0}</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.daysWorked}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#6b7280', minWidth: '180px' }}>Toplam Çalışma Gün Sayısı</span>
                   <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked || 0}</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.daysWorked}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Mesai Sayısı</span>
                   <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.grandTotalHours || 0}</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.grandTotalHours}</span>
                 </div>
               </div>
 
