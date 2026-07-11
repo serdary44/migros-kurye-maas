@@ -35,7 +35,7 @@ export function getMonthlyBonus(count, brackets = MONTHLY_BONUS_BRACKETS) {
  * @param {Array} dailyBrackets - Daily premium brackets.
  * @returns {Object} Calculated values for the day.
  */
-export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_PREMIUM_BRACKETS) {
+export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_PREMIUM_BRACKETS, vatRate = 20) {
   const hours = parseFloat(log.hours_worked || 0);
   const market = parseInt(log.market_packages || 0);
   const food0_4 = parseInt(log.food_packages_0_4 || 0);
@@ -47,10 +47,11 @@ export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_P
   // Calculate daily package premium
   const dailyPremium = getDailyPremium(totalPackages, dailyBrackets);
   
-  // Calculate distance support (Yemek mesafe destegi)
-  const distanceSupport = 
+  // Calculate distance support (Yemek mesafe destegi) - divided by (1 + vatRate / 100) to get KDV-excluded value
+  const rawDistanceSupport = 
     (food4_6 * FOOD_DISTANCE_SUPPORT.medium) + 
     (food6plus * FOOD_DISTANCE_SUPPORT.long);
+  const distanceSupport = rawDistanceSupport / (1 + vatRate / 100);
     
   // Fixed hourly income
   const fixedIncome = hours * hourlyRate;
@@ -67,9 +68,9 @@ export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_P
     food6plus,
     totalPackages,
     dailyPremium,
-    distanceSupport,
+    distanceSupport: parseFloat(distanceSupport.toFixed(4)),
     fixedIncome,
-    dailyTotalNet
+    dailyTotalNet: parseFloat(dailyTotalNet.toFixed(4))
   };
 }
 
@@ -88,8 +89,8 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   const duesInstallments = parseFloat(settings.dues_installments ?? 1200);
   const vatRate = parseFloat(settings.vat_rate ?? 20);
   const withholdingRate = parseFloat(settings.withholding_rate ?? 20); // 2/10 is 20%
-  const packetPremiumRate = parseFloat(settings.packet_premium_rate ?? 0.50); // Default per-packet premium
   const monthlyExtraHours = parseFloat(settings.monthly_extra_hours ?? 0); // User entered manual overtime hours
+  const monthlyExtraPremiums = parseFloat(settings.monthly_extra_premiums ?? 0); // Flat monthly extra premiums (e.g. June Migros Paketbaşı Primi)
 
   const dailyBrackets = customBrackets.dailyPremiumBrackets || DAILY_PREMIUM_BRACKETS;
   const monthlyBrackets = customBrackets.monthlyBonusBrackets || MONTHLY_BONUS_BRACKETS;
@@ -107,7 +108,7 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   let cumulativeDistanceSupport = 0;
 
   const calculatedDailyLogs = logs.map(log => {
-    const calc = calculateDailyLog(log, hourlyRate, dailyBrackets);
+    const calc = calculateDailyLog(log, hourlyRate, dailyBrackets, vatRate);
     totalHours += calc.hoursWorked;
     totalMarketPackages += calc.marketPackages;
     totalFood0_4 += calc.food0_4;
@@ -130,17 +131,17 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   // Calculate monthly bonus
   const monthlyBonus = getMonthlyBonus(totalPackages, monthlyBrackets);
 
-  // Migros per-packet premium
-  const migrosPacketPremium = totalPackages * packetPremiumRate;
+  // Migros per-packet premium (mapped to food distance support!)
+  const migrosPacketPremium = cumulativeDistanceSupport;
 
   // Gross Earnings (KDV Hariç Toplam Gelir)
   const grossEarnings = 
     totalFixedIncome + 
     cumulativeDailyPremium + 
-    cumulativeDistanceSupport + 
+    migrosPacketPremium + 
     monthlyBonus + 
     senioritySupport + 
-    migrosPacketPremium;
+    monthlyExtraPremiums;
 
   // Deduct relief fund
   const netEarningsPreVat = grossEarnings - reliefFund;
