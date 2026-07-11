@@ -10,17 +10,16 @@ import {
 } from '../utils/constants.js';
 
 export default function QuickCalc() {
-  // Input states
-  const [daysWorked, setDaysWorked] = useState(26);
-  const [totalHours, setTotalHours] = useState(296.66);
-  const [monthlyExtraHours, setMonthlyExtraHours] = useState(0);
+  // Input states (initialized empty as requested by user)
+  const [daysWorked, setDaysWorked] = useState('');
+  const [totalHours, setTotalHours] = useState('');
+  const [monthlyExtraHours, setMonthlyExtraHours] = useState('');
   
   // Package inputs
-  const [marketPackages, setMarketPackages] = useState(900);
-  const [food0_4, setFood0_4] = useState(124);
-  const [food4_6, setFood4_6] = useState(22);
-  const [food6plus, setFood6plus] = useState(2);
-  const [extraPremiumsInput, setExtraPremiumsInput] = useState(0);
+  const [marketPackages, setMarketPackages] = useState(''); // Normal packages (Market + Yemek 0-4 Km)
+  const [food4_6, setFood4_6] = useState('');
+  const [food6plus, setFood6plus] = useState('');
+  const [extraPremiumsInput, setExtraPremiumsInput] = useState('');
   
   // Configuration inputs
   const [showConfig, setShowConfig] = useState(false);
@@ -43,12 +42,11 @@ export default function QuickCalc() {
   // Memoized calculations
   const results = useMemo(() => {
     const monthlyData = {
-      days_worked: daysWorked,
-      total_hours: totalHours,
-      market_packages: marketPackages,
-      food_packages_0_4: food0_4,
-      food_packages_4_6: food4_6,
-      food_packages_6plus: food6plus
+      days_worked: parseInt(daysWorked) || 0,
+      total_hours: parseFloat(totalHours) || 0,
+      market_packages: parseInt(marketPackages) || 0,
+      food_packages_4_6: parseInt(food4_6) || 0,
+      food_packages_6plus: parseInt(food6plus) || 0
     };
 
     const settings = {
@@ -58,19 +56,19 @@ export default function QuickCalc() {
       dues_installments: duesInstallments,
       vat_rate: vatRate,
       withholding_rate: withholdingRate,
-      monthly_extra_hours: monthlyExtraHours,
-      monthly_extra_premiums: extraPremiumsInput
+      monthly_extra_hours: parseFloat(monthlyExtraHours) || 0,
+      monthly_extra_premiums: parseFloat(extraPremiumsInput) || 0
     };
 
     return calculateFromMonthlyAverages(monthlyData, settings);
   }, [
     daysWorked, totalHours, monthlyExtraHours, extraPremiumsInput,
-    marketPackages, food0_4, food4_6, food6plus,
+    marketPackages, food4_6, food6plus,
     hourlyRate, senioritySupport, reliefFund, duesInstallments,
     vatRate, withholdingRate
   ]);
 
-  const totalPackages = marketPackages + food0_4 + food4_6 + food6plus;
+  const totalPackages = (parseInt(marketPackages) || 0) + (parseInt(food4_6) || 0) + (parseInt(food6plus) || 0);
 
   // Format helper
   const formatCurrency = (val) => {
@@ -104,9 +102,8 @@ export default function QuickCalc() {
                   type="number" 
                   className="glass-input" 
                   value={daysWorked}
-                  onChange={(e) => setDaysWorked(Math.max(1, parseInt(e.target.value) || 0))}
-                  min="1"
-                  max="31"
+                  onChange={(e) => setDaysWorked(e.target.value)}
+                  placeholder="Örn: 26"
                 />
               </div>
 
@@ -117,8 +114,8 @@ export default function QuickCalc() {
                   step="0.01"
                   className="glass-input" 
                   value={totalHours}
-                  onChange={(e) => setTotalHours(Math.max(0, parseFloat(e.target.value) || 0))}
-                  min="0"
+                  onChange={(e) => setTotalHours(e.target.value)}
+                  placeholder="Örn: 296.66"
                 />
               </div>
             </div>
@@ -131,8 +128,7 @@ export default function QuickCalc() {
                   step="0.5"
                   className="glass-input" 
                   value={monthlyExtraHours}
-                  onChange={(e) => setMonthlyExtraHours(Math.max(0, parseFloat(e.target.value) || 0))}
-                  min="0"
+                  onChange={(e) => setMonthlyExtraHours(e.target.value)}
                   placeholder="Örn: 4.5"
                 />
               </div>
@@ -144,8 +140,7 @@ export default function QuickCalc() {
                   step="0.01"
                   className="glass-input" 
                   value={extraPremiumsInput}
-                  onChange={(e) => setExtraPremiumsInput(Math.max(0, parseFloat(e.target.value) || 0))}
-                  min="0"
+                  onChange={(e) => setExtraPremiumsInput(e.target.value)}
                   placeholder="Örn: 500"
                 />
               </div>
@@ -160,58 +155,49 @@ export default function QuickCalc() {
               <span style={{ color: 'var(--primary)' }}>📦</span> Dağıtılan Paketler
             </h3>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.75rem' }}>Market Paketleri</label>
+                <label className="form-label">Normal Paketler (Market + Yemek 0-4 Km)</label>
                 <input 
                   type="number" 
                   className="glass-input" 
                   value={marketPackages}
-                  onChange={(e) => setMarketPackages(Math.max(0, parseInt(e.target.value) || 0))}
-                  min="0"
-                  placeholder="Sanal Mkt + Hemen + Paket Taxi"
+                  onChange={(e) => setMarketPackages(e.target.value)}
+                  placeholder="Normal Sipariş Toplamı (Örn: 1024)"
                 />
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  Yemek 0-4 Km paketleri normal market paketi gibi hesaplandığından buraya dahil edilmelidir.
+                </span>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.75rem' }}>Yemek (0-4 Km) Paketleri</label>
-                <input 
-                  type="number" 
-                  className="glass-input" 
-                  value={food0_4}
-                  onChange={(e) => setFood0_4(Math.max(0, parseInt(e.target.value) || 0))}
-                  min="0"
-                />
-              </div>
-            </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Yemek (4-6 Km)</span>
+                    <span style={{ color: 'var(--success)' }}>+25 TL/pkt</span>
+                  </label>
+                  <input 
+                    type="number" 
+                    className="glass-input" 
+                    value={food4_6}
+                    onChange={(e) => setFood4_6(e.target.value)}
+                    placeholder="Örn: 22"
+                  />
+                </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-              <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Yemek (4-6 Km)</span>
-                  <span style={{ color: 'var(--success)' }}>+25 TL/pkt</span>
-                </label>
-                <input 
-                  type="number" 
-                  className="glass-input" 
-                  value={food4_6}
-                  onChange={(e) => setFood4_6(Math.max(0, parseInt(e.target.value) || 0))}
-                  min="0"
-                />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Yemek (+6 Km)</span>
-                  <span style={{ color: 'var(--success)' }}>+35 TL/pkt</span>
-                </label>
-                <input 
-                  type="number" 
-                  className="glass-input" 
-                  value={food6plus}
-                  onChange={(e) => setFood6plus(Math.max(0, parseInt(e.target.value) || 0))}
-                  min="0"
-                />
+                <div className="form-group">
+                  <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Yemek (+6 Km)</span>
+                    <span style={{ color: 'var(--success)' }}>+35 TL/pkt</span>
+                  </label>
+                  <input 
+                    type="number" 
+                    className="glass-input" 
+                    value={food6plus}
+                    onChange={(e) => setFood6plus(e.target.value)}
+                    placeholder="Örn: 2"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -393,17 +379,17 @@ export default function QuickCalc() {
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Çalışma Gün Sayısı</span>
                   <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked}</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked || 0}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#6b7280', minWidth: '180px' }}>Toplam Çalışma Gün Sayısı</span>
                   <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked}</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked || 0}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Mesai Sayısı</span>
                   <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
-                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.grandTotalHours}</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.grandTotalHours || 0}</span>
                 </div>
               </div>
 

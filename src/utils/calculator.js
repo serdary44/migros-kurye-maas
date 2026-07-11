@@ -37,14 +37,13 @@ export function getMonthlyBonus(count, brackets = MONTHLY_BONUS_BRACKETS) {
  */
 export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_PREMIUM_BRACKETS, vatRate = 20) {
   const hours = parseFloat(log.hours_worked || 0);
-  const market = parseInt(log.market_packages || 0);
-  const food0_4 = parseInt(log.food_packages_0_4 || 0);
+  const market = parseInt(log.market_packages || 0); // Normal packages (Market + Yemek 0-4 Km)
   const food4_6 = parseInt(log.food_packages_4_6 || 0);
   const food6plus = parseInt(log.food_packages_6plus || 0);
   const fuelExpense = parseFloat(log.fuel_expense || 0);
   const motorLeaseExpense = parseFloat(log.motor_lease_expense || 0);
 
-  const totalPackages = market + food0_4 + food4_6 + food6plus;
+  const totalPackages = market + food4_6 + food6plus;
   
   // Calculate daily package premium
   const dailyPremium = getDailyPremium(totalPackages, dailyBrackets);
@@ -65,7 +64,6 @@ export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_P
     date: log.log_date,
     hoursWorked: hours,
     marketPackages: market,
-    food0_4,
     food4_6,
     food6plus,
     totalPackages,
@@ -103,7 +101,6 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   // Aggregate daily logs
   let totalHours = 0;
   let totalMarketPackages = 0;
-  let totalFood0_4 = 0;
   let totalFood4_6 = 0;
   let totalFood6plus = 0;
   let totalPackages = 0;
@@ -118,7 +115,6 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
     const calc = calculateDailyLog(log, hourlyRate, dailyBrackets, vatRate);
     totalHours += calc.hoursWorked;
     totalMarketPackages += calc.marketPackages;
-    totalFood0_4 += calc.food0_4;
     totalFood4_6 += calc.food4_6;
     totalFood6plus += calc.food6plus;
     totalPackages += calc.totalPackages;
@@ -180,7 +176,6 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
     monthlyExtraHours: parseFloat(monthlyExtraHours.toFixed(2)),
     grandTotalHours: parseFloat(grandTotalHours.toFixed(2)),
     totalMarketPackages,
-    totalFood0_4,
     totalFood4_6,
     totalFood6plus,
     totalPackages,
@@ -220,7 +215,6 @@ export function calculateFromMonthlyAverages(monthlyData, settings = {}) {
   const days = Math.max(1, parseInt(monthlyData.days_worked ?? 26));
   const hours = parseFloat(monthlyData.total_hours ?? 0);
   const market = parseInt(monthlyData.market_packages ?? 0);
-  const food0_4 = parseInt(monthlyData.food_packages_0_4 ?? 0);
   const food4_6 = parseInt(monthlyData.food_packages_4_6 ?? 0);
   const food6plus = parseInt(monthlyData.food_packages_6plus ?? 0);
   const fuel = parseFloat(monthlyData.total_fuel_expense ?? 0);
@@ -228,7 +222,6 @@ export function calculateFromMonthlyAverages(monthlyData, settings = {}) {
 
   const avgHours = hours / days;
   const avgMarket = market / days;
-  const avgFood0_4 = food0_4 / days;
   const avgFood4_6 = food4_6 / days;
   const avgFood6plus = food6plus / days;
   const avgFuel = fuel / days;
@@ -240,7 +233,6 @@ export function calculateFromMonthlyAverages(monthlyData, settings = {}) {
       log_date: `MockDay-${i + 1}`,
       hours_worked: avgHours,
       market_packages: avgMarket,
-      food_packages_0_4: avgFood0_4,
       food_packages_4_6: avgFood4_6,
       food_packages_6plus: avgFood6plus,
       fuel_expense: avgFuel,

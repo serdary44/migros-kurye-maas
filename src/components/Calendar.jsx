@@ -6,14 +6,13 @@ export default function Calendar({ session, selectedCourier, onLogChange, logs =
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
   
-  // Form states for selected day
-  const [hoursWorked, setHoursWorked] = useState(12);
-  const [marketPackages, setMarketPackages] = useState(0);
-  const [food0_4, setFood0_4] = useState(0);
-  const [food4_6, setFood4_6] = useState(0);
-  const [food6plus, setFood6plus] = useState(0);
-  const [fuelExpense, setFuelExpense] = useState(0);
-  const [motorLeaseExpense, setMotorLeaseExpense] = useState(0);
+  // Form states for selected day (initialized empty as requested by user)
+  const [hoursWorked, setHoursWorked] = useState('');
+  const [marketPackages, setMarketPackages] = useState(''); // Normal packages (Market + Yemek 0-4 Km)
+  const [food4_6, setFood4_6] = useState('');
+  const [food6plus, setFood6plus] = useState('');
+  const [fuelExpense, setFuelExpense] = useState('');
+  const [motorLeaseExpense, setMotorLeaseExpense] = useState('');
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -69,22 +68,20 @@ export default function Calendar({ session, selectedCourier, onLogChange, logs =
     setSelectedDay(day);
 
     if (day.log) {
-      setHoursWorked(day.log.hours_worked ?? 12);
-      setMarketPackages(day.log.market_packages ?? 0);
-      setFood0_4(day.log.food_packages_0_4 ?? 0);
-      setFood4_6(day.log.food_packages_4_6 ?? 0);
-      setFood6plus(day.log.food_packages_6plus ?? 0);
-      setFuelExpense(day.log.fuel_expense ?? 0);
-      setMotorLeaseExpense(day.log.motor_lease_expense ?? 0);
+      setHoursWorked(day.log.hours_worked ?? '');
+      setMarketPackages(day.log.market_packages ?? '');
+      setFood4_6(day.log.food_packages_4_6 ?? '');
+      setFood6plus(day.log.food_packages_6plus ?? '');
+      setFuelExpense(day.log.fuel_expense ?? '');
+      setMotorLeaseExpense(day.log.motor_lease_expense ?? '');
     } else {
       // Default values for new log
-      setHoursWorked(12);
-      setMarketPackages(0);
-      setFood0_4(0);
-      setFood4_6(0);
-      setFood6plus(0);
-      setFuelExpense(0);
-      setMotorLeaseExpense(0);
+      setHoursWorked('');
+      setMarketPackages('');
+      setFood4_6('');
+      setFood6plus('');
+      setFuelExpense('');
+      setMotorLeaseExpense('');
     }
   };
 
@@ -98,13 +95,12 @@ export default function Calendar({ session, selectedCourier, onLogChange, logs =
       const logData = {
         courier_id: selectedCourier.id,
         log_date: selectedDay.dateStr,
-        hours_worked: parseFloat(hoursWorked),
-        market_packages: parseInt(marketPackages),
-        food_packages_0_4: parseInt(food0_4),
-        food_packages_4_6: parseInt(food4_6),
-        food_packages_6plus: parseInt(food6plus),
-        fuel_expense: parseFloat(fuelExpense),
-        motor_lease_expense: parseFloat(motorLeaseExpense)
+        hours_worked: parseFloat(hoursWorked) || 0,
+        market_packages: parseInt(marketPackages) || 0,
+        food_packages_4_6: parseInt(food4_6) || 0,
+        food_packages_6plus: parseInt(food6plus) || 0,
+        fuel_expense: parseFloat(fuelExpense) || 0,
+        motor_lease_expense: parseFloat(motorLeaseExpense) || 0
       };
 
       let error;
@@ -285,56 +281,46 @@ export default function Calendar({ session, selectedCourier, onLogChange, logs =
                     className="glass-input" 
                     value={hoursWorked}
                     onChange={(e) => setHoursWorked(e.target.value)}
-                    required
-                    min="0"
-                    max="24"
+                    placeholder="Saat Girin"
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Market Dağıtılan Paket (Sanal + Hemen + PT)</label>
+                  <label className="form-label">Normal Paketler (Market + Yemek 0-4 Km)</label>
                   <input 
                     type="number" 
                     className="glass-input" 
                     value={marketPackages}
                     onChange={(e) => setMarketPackages(e.target.value)}
-                    required
-                    min="0"
+                    placeholder="Normal Sipariş Toplamı"
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
                   <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.7rem' }}>Yemek (0-4 km)</label>
-                    <input 
-                      type="number" 
-                      className="glass-input" 
-                      value={food0_4}
-                      onChange={(e) => setFood0_4(e.target.value)}
-                      required
-                      min="0"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.7rem' }}>Yemek (4-6 km)</label>
+                    <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Yemek (4-6 Km)</span>
+                      <span style={{ color: 'var(--success)' }}>+25 TL</span>
+                    </label>
                     <input 
                       type="number" 
                       className="glass-input" 
                       value={food4_6}
                       onChange={(e) => setFood4_6(e.target.value)}
-                      required
-                      min="0"
+                      placeholder="Örn: 22"
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label" style={{ fontSize: '0.7rem' }}>Yemek (+6 km)</label>
+                    <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Yemek (+6 Km)</span>
+                      <span style={{ color: 'var(--success)' }}>+35 TL</span>
+                    </label>
                     <input 
                       type="number" 
                       className="glass-input" 
                       value={food6plus}
                       onChange={(e) => setFood6plus(e.target.value)}
-                      required
-                      min="0"
+                      placeholder="Örn: 2"
                     />
                   </div>
                 </div>
@@ -348,8 +334,7 @@ export default function Calendar({ session, selectedCourier, onLogChange, logs =
                       className="glass-input" 
                       value={fuelExpense}
                       onChange={(e) => setFuelExpense(e.target.value)}
-                      required
-                      min="0"
+                      placeholder="Gider Girin"
                     />
                   </div>
                   <div className="form-group">
@@ -360,8 +345,7 @@ export default function Calendar({ session, selectedCourier, onLogChange, logs =
                       className="glass-input" 
                       value={motorLeaseExpense}
                       onChange={(e) => setMotorLeaseExpense(e.target.value)}
-                      required
-                      min="0"
+                      placeholder="Gider Girin"
                     />
                   </div>
                 </div>

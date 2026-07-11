@@ -6,8 +6,8 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
   const [currentDate, setCurrentDate] = useState(new Date());
   
   // Extra hours and premiums input states
-  const [extraHoursInput, setExtraHoursInput] = useState(0);
-  const [extraPremiumsInput, setExtraPremiumsInput] = useState(0);
+  const [extraHoursInput, setExtraHoursInput] = useState('');
+  const [extraPremiumsInput, setExtraPremiumsInput] = useState('');
   const [savingData, setSavingData] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -38,8 +38,8 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
   // Sync inputs with selected courier details
   useEffect(() => {
     if (selectedCourier) {
-      setExtraHoursInput(selectedCourier.monthly_extra_hours ?? 0);
-      setExtraPremiumsInput(selectedCourier.monthly_extra_premiums ?? 0);
+      setExtraHoursInput(selectedCourier.monthly_extra_hours || '');
+      setExtraPremiumsInput(selectedCourier.monthly_extra_premiums || '');
       setMessage('');
     }
   }, [selectedCourier]);
@@ -258,12 +258,8 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Market Paketleri:</span>
+                <span style={{ color: 'var(--text-muted)' }}>Normal Paketler (Market + Yemek 0-4 Km):</span>
                 <span style={{ fontWeight: 600 }}>{results.totalMarketPackages} Paket</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Yemek (0-4 Km):</span>
-                <span style={{ fontWeight: 600 }}>{results.totalFood0_4} Paket</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 <span style={{ color: 'var(--text-muted)' }}>Yemek (4-6 Km - +25 TL):</span>
