@@ -43,7 +43,7 @@ export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_P
   const fuelExpense = parseFloat(log.fuel_expense || 0);
   const motorLeaseExpense = parseFloat(log.motor_lease_expense || 0);
 
-  const totalPackages = market + food4_6 + food6plus;
+  const totalPackages = market; // market represents the TOTAL packages entered in the first box
   
   // Calculate daily package premium
   const dailyPremium = getDailyPremium(totalPackages, dailyBrackets);

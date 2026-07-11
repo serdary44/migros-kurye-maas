@@ -397,13 +397,13 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
                     </div>
 
                     <div className="form-group">
-                      <label className="form-label">Normal Paketler (Market & 0-4 Km Yemek)</label>
+                      <label className="form-label">Günlük Toplam Paket (Market + Tüm Yemekler)</label>
                       <input 
                         type="number" 
                         className="glass-input" 
                         value={marketPackages}
                         onChange={(e) => setMarketPackages(e.target.value)}
-                        placeholder="Normal Paket Toplamı"
+                        placeholder="Toplam Paket Sayısı"
                       />
                     </div>
                   </div>
