@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase/supabaseClient.js';
 import { calculateDailyLog } from '../utils/calculator.js';
 
-export default function Calendar({ session, onLogChange, logs = [], hourlyRate = 177 }) {
+export default function Calendar({ session, selectedCourier, onLogChange, logs = [], hourlyRate = 177 }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDay, setSelectedDay] = useState(null);
   
@@ -12,6 +12,8 @@ export default function Calendar({ session, onLogChange, logs = [], hourlyRate =
   const [food0_4, setFood0_4] = useState(0);
   const [food4_6, setFood4_6] = useState(0);
   const [food6plus, setFood6plus] = useState(0);
+  const [fuelExpense, setFuelExpense] = useState(0);
+  const [motorLeaseExpense, setMotorLeaseExpense] = useState(0);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -33,10 +35,7 @@ export default function Calendar({ session, onLogChange, logs = [], hourlyRate =
   const month = currentDate.getMonth();
 
   const firstDayIndex = new Date(year, month, 1).getDay();
-  // Adjust for Monday start of week (Monday is 0, Sunday is 6)
-  // standard getDay() is Sunday = 0, Monday = 1 ... Saturday = 6
   const adjustedFirstDayIndex = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
-
   const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
 
   // Create list of days
@@ -53,7 +52,7 @@ export default function Calendar({ session, onLogChange, logs = [], hourlyRate =
     // If log exists, calculate its earnings to show on calendar
     let calc = null;
     if (dayLog) {
-      calc = calculateDailyLog(dayLog, hourlyRate);
+      calc = calculateDailyLog(dayLog, hourlyRate, undefined, selectedCourier?.vat_rate ?? 20);
     }
 
     days.push({
@@ -75,6 +74,8 @@ export default function Calendar({ session, onLogChange, logs = [], hourlyRate =
       setFood0_4(day.log.food_packages_0_4 ?? 0);
       setFood4_6(day.log.food_packages_4_6 ?? 0);
       setFood6plus(day.log.food_packages_6plus ?? 0);
+      setFuelExpense(day.log.fuel_expense ?? 0);
+      setMotorLeaseExpense(day.log.motor_lease_expense ?? 0);
     } else {
       // Default values for new log
       setHoursWorked(12);
@@ -82,124 +83,182 @@ export default function Calendar({ session, onLogChange, logs = [], hourlyRate =
       setFood0_4(0);
       setFood4_6(0);
       setFood6plus(0);
+      setFuelExpense(0);
+      setMotorLeaseExpense(0);
     }
   };
 
   // Upsert daily log in DB
   const handleSaveLog = async (e) => {
     e.preventDefault();
-    if (!session?.user || !selectedDay) return;
+    if (!selectedCourier || !selectedDay) return;
     
     try {
       setSaving(true);
       const logData = {
-        user_id: session.user.id,
+        courier_id: selectedCourier.id,
         log_date: selectedDay.dateStr,
         hours_worked: parseFloat(hoursWorked),
         market_packages: parseInt(marketPackages),
         food_packages_0_4: parseInt(food0_4),
         food_packages_4_6: parseInt(food4_6),
-        food_packages_6plus: parseInt(food6plus)
+        food_packages_6plus: parseInt(food6plus),
+        fuel_expense: parseFloat(fuelExpense),
+        motor_lease_expense: parseFloat(motorLeaseExpense)
       };
 
-      const { error } = await supabase
-        .from('daily_logs')
-        .upsert(logData, { onConflict: 'user_id,log_date' });
+      let error;
+      if (selectedDay.log) {
+        // Update existing log
+        const { error: updateError } = await supabase
+          .from('daily_logs')
+          .update(logData)
+          .eq('id', selectedDay.log.id);
+        error = updateError;
+      } else {
+        // Insert new log
+        const { error: insertError } = await supabase
+          .from('daily_logs')
+          .insert([logData]);
+        error = insertError;
+      }
 
       if (error) throw error;
 
-      // Close panel and notify parent to reload logs
+      onLogChange();
       setSelectedDay(null);
-      if (onLogChange) onLogChange();
     } catch (error) {
-      console.error('Error saving daily log:', error.message);
-      alert('Günlük veri kaydedilirken hata oluştu: ' + error.message);
+      console.error('Error saving log:', error.message);
+      alert('Günlük veriler kaydedilirken hata oluştu: ' + error.message);
     } finally {
       setSaving(false);
     }
   };
 
-  // Delete daily log
+  // Delete daily log from DB
   const handleDeleteLog = async () => {
-    if (!session?.user || !selectedDay || !selectedDay.log) return;
-    
-    if (!window.confirm(`${selectedDay.dayNumber} ${monthYearStr} tarihli veriyi silmek istediğinize emin misiniz?`)) {
-      return;
-    }
+    if (!selectedDay?.log) return;
+    if (!window.confirm(`${selectedDay.dateStr} tarihli günlük veriyi silmek istediğinize emin misiniz?`)) return;
 
     try {
       setDeleting(true);
       const { error } = await supabase
         .from('daily_logs')
         .delete()
-        .eq('user_id', session.user.id)
-        .eq('log_date', selectedDay.dateStr);
+        .eq('id', selectedDay.log.id);
 
       if (error) throw error;
 
+      onLogChange();
       setSelectedDay(null);
-      if (onLogChange) onLogChange();
     } catch (error) {
-      console.error('Error deleting daily log:', error.message);
-      alert('Günlük veri silinirken hata oluştu: ' + error.message);
+      console.error('Error deleting log:', error.message);
+      alert('Gün silinirken hata oluştu.');
     } finally {
       setDeleting(false);
     }
   };
 
+  const formatCurrency = (val) => {
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
+  };
+
   return (
-    <div className="animated-page">
-      <div className="dashboard-grid">
+    <div className="animated-page" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      
+      {/* Month selector header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--primary)' }}>
+            🗓️ "{selectedCourier.name}" Çalışma Takvimi
+          </h2>
+          <p style={{ color: 'var(--text-muted)' }}>
+            Gün seçerek o günkü çalışma saatlerinizi, paket sayılarınızı ve operasyonel giderlerinizi girin.
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          <button onClick={prevMonth} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }}>◄ Önceki Ay</button>
+          <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: '120px', textAlign: 'center' }}>{monthYearStr}</span>
+          <button onClick={nextMonth} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }}>Sonraki Ay ►</button>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem', alignItems: 'start' }}>
         
         {/* Calendar Grid */}
-        <div className="glass-card">
-          <div className="calendar-header">
-            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-main)' }}>
-              {monthYearStr}
-            </h3>
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <button onClick={prevMonth} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }}>◄ Geri</button>
-              <button onClick={nextMonth} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }}>İleri ►</button>
-            </div>
+        <div className="glass-card" style={{ padding: '1.5rem' }}>
+          
+          {/* Days of week header */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>
+            <div>Pzt</div>
+            <div>Sal</div>
+            <div>Çar</div>
+            <div>Per</div>
+            <div>Cum</div>
+            <div>Cmt</div>
+            <div>Paz</div>
           </div>
 
-          <div className="calendar-grid">
-            <div className="calendar-day-header">Pzt</div>
-            <div className="calendar-day-header">Sal</div>
-            <div className="calendar-day-header">Çar</div>
-            <div className="calendar-day-header">Per</div>
-            <div className="calendar-day-header">Cum</div>
-            <div className="calendar-day-header">Cmt</div>
-            <div className="calendar-day-header">Paz</div>
-
+          {/* Calendar grid items */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.5rem' }}>
             {days.map((day, index) => {
               if (day.empty) {
-                return <div key={`empty-${index}`} className="calendar-day empty" />;
+                return <div key={`empty-${index}`} style={{ aspectRatio: '1.2', opacity: 0 }}></div>;
               }
 
+              const isLogged = !!day.log;
               const isSelected = selectedDay && selectedDay.dateStr === day.dateStr;
-              const hasLog = !!day.log;
+              
+              let background = 'rgba(255, 255, 255, 0.02)';
+              let border = '1px solid var(--border-light)';
+              if (isLogged) {
+                background = 'rgba(249, 115, 22, 0.05)';
+                border = '1px solid rgba(249, 115, 22, 0.3)';
+              }
+              if (isSelected) {
+                border = '2px solid var(--primary)';
+                background = 'rgba(249, 115, 22, 0.15)';
+              }
 
               return (
                 <div 
-                  key={`day-${day.dayNumber}`} 
+                  key={day.dateStr}
                   onClick={() => handleDayClick(day)}
-                  className={`calendar-day ${hasLog ? 'active' : ''} ${isSelected ? 'selected' : ''}`}
+                  style={{
+                    aspectRatio: '1.2',
+                    padding: '0.5rem',
+                    borderRadius: 'var(--radius-sm)',
+                    background,
+                    border,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    transition: 'all 0.2s ease',
+                  }}
+                  className="calendar-day"
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span className="day-number">{day.dayNumber}</span>
-                    
-                    {hasLog && (
-                      <div className="day-dots">
-                        {day.log.hours_worked > 0 && <span className="day-dot hours" title={`Süre: ${day.log.hours_worked} sa`} />}
-                        {day.calc?.totalPackages > 0 && <span className="day-dot packages" title={`Paket: ${day.calc.totalPackages}`} />}
-                      </div>
-                    )}
-                  </div>
-
-                  {hasLog && day.calc && (
-                    <div className="day-summary-text">
-                      {Math.round(day.calc.dailyTotalNet)} ₺
+                  <span style={{ 
+                    fontWeight: 700, 
+                    fontSize: '0.9rem',
+                    color: isLogged ? 'var(--text-main)' : 'var(--text-muted)'
+                  }}>
+                    {day.dayNumber}
+                  </span>
+                  
+                  {isLogged && day.calc && (
+                    <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)' }}>
+                        {day.calc.totalPackages} Pkt
+                      </span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--success)' }}>
+                        {formatCurrency(day.calc.dailyTotalNet * (1 + (selectedCourier?.vat_rate ?? 20) / 100) - (day.calc.dailyTotalNet * (selectedCourier?.vat_rate ?? 20) / 100 * (selectedCourier?.withholding_rate ?? 20) / 100))}
+                      </span>
+                      {day.calc.totalDailyExpense > 0 && (
+                        <span style={{ fontSize: '0.65rem', color: '#ef4444' }}>
+                          -{formatCurrency(day.calc.totalDailyExpense)} Gdr
+                        </span>
+                      )}
                     </div>
                   )}
                 </div>
@@ -208,152 +267,138 @@ export default function Calendar({ session, onLogChange, logs = [], hourlyRate =
           </div>
         </div>
 
-        {/* Selected Day Log Panel */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* Edit Panel */}
+        <div className="glass-card" style={{ padding: '1.5rem', minHeight: '300px' }}>
           {selectedDay ? (
-            <div className="glass-card animated-page" style={{ borderLeft: '3px solid var(--primary)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
-                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--primary)' }}>
-                  📅 {selectedDay.dayNumber} {monthYearStr} Verisi
-                </h3>
-                <button 
-                  onClick={() => setSelectedDay(null)} 
-                  style={{ color: 'var(--text-muted)', fontSize: '1.2rem', padding: '0.2rem' }}
-                >
-                  ✕
-                </button>
-              </div>
-
+            <div>
+              <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.5rem' }}>
+                ✏️ {selectedDay.dateStr} Gününü Düzenle
+              </h3>
+              
               <form onSubmit={handleSaveLog} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 
                 <div className="form-group">
                   <label className="form-label">Çalışılan Süre (Saat)</label>
                   <input 
                     type="number" 
-                    step="0.01" 
-                    className="glass-input"
+                    step="0.5"
+                    className="glass-input" 
                     value={hoursWorked}
                     onChange={(e) => setHoursWorked(e.target.value)}
+                    required
                     min="0"
                     max="24"
-                    required
                   />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    Giriş yaptığınız süre en fazla 12 saat olabilir. 12 saat üzeri fazla mesailer için lütfen paneldeki "Aylık Ekstra Mesai" alanını kullanın.
-                  </span>
-                </div>
-
-                <div className="alert-box info" style={{ padding: '0.75rem', fontSize: '0.8rem' }}>
-                  <span>⚠️</span>
-                  <div>
-                    <strong>Hatırlatma:</strong> İptal edilen siparişler ücrete tabi değildir. Yalnızca teslim ettiğiniz siparişleri girin.
-                  </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Market Paket Sayısı</label>
+                  <label className="form-label">Market Dağıtılan Paket (Sanal + Hemen + PT)</label>
                   <input 
                     type="number" 
-                    className="glass-input"
+                    className="glass-input" 
                     value={marketPackages}
                     onChange={(e) => setMarketPackages(e.target.value)}
-                    min="0"
                     required
-                  />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    Sanal Market, Migros Hemen ve Paket Taxi siparişleri toplamı.
-                  </span>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Yemek Paket Sayısı (0-4 Km)</label>
-                  <input 
-                    type="number" 
-                    className="glass-input"
-                    value={food0_4}
-                    onChange={(e) => setFood0_4(e.target.value)}
                     min="0"
-                    required
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem' }}>
                   <div className="form-group">
-                    <label className="form-label">Yemek (4-6 Km)</label>
+                    <label className="form-label" style={{ fontSize: '0.7rem' }}>Yemek (0-4 km)</label>
                     <input 
                       type="number" 
-                      className="glass-input"
+                      className="glass-input" 
+                      value={food0_4}
+                      onChange={(e) => setFood0_4(e.target.value)}
+                      required
+                      min="0"
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.7rem' }}>Yemek (4-6 km)</label>
+                    <input 
+                      type="number" 
+                      className="glass-input" 
                       value={food4_6}
                       onChange={(e) => setFood4_6(e.target.value)}
-                      min="0"
                       required
+                      min="0"
                     />
                   </div>
-
                   <div className="form-group">
-                    <label className="form-label">Yemek (+6 Km)</label>
+                    <label className="form-label" style={{ fontSize: '0.7rem' }}>Yemek (+6 km)</label>
                     <input 
                       type="number" 
-                      className="glass-input"
+                      className="glass-input" 
                       value={food6plus}
                       onChange={(e) => setFood6plus(e.target.value)}
-                      min="0"
                       required
+                      min="0"
                     />
                   </div>
                 </div>
 
-                {selectedDay.calc && (
-                  <div style={{ background: 'rgba(255,255,255,0.03)', padding: '0.75rem', borderRadius: 'var(--radius-md)', border: '1px dashed var(--border-light)', fontSize: '0.85rem' }}>
-                    <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--primary)' }}>Günlük Tahmini Gelir (KDV Hariç):</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Sabit Çalışma:</span>
-                      <span>{(selectedDay.calc.fixedIncome).toFixed(2)} ₺</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span>Paket Primi:</span>
-                      <span>{(selectedDay.calc.dailyPremium).toFixed(2)} ₺</span>
-                    </div>
-                    {selectedDay.calc.distanceSupport > 0 && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>Mesafe Desteği:</span>
-                        <span>{(selectedDay.calc.distanceSupport).toFixed(2)} ₺</span>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700, borderTop: '1px solid var(--border-light)', marginTop: '0.25rem', paddingTop: '0.25rem', color: 'var(--success)' }}>
-                      <span>Toplam:</span>
-                      <span>{(selectedDay.calc.dailyTotalNet).toFixed(2)} ₺</span>
-                    </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#f87171' }}>Günlük Yakıt (TL)</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      className="glass-input" 
+                      value={fuelExpense}
+                      onChange={(e) => setFuelExpense(e.target.value)}
+                      required
+                      min="0"
+                    />
                   </div>
-                )}
+                  <div className="form-group">
+                    <label className="form-label" style={{ color: '#f87171' }}>Motor Kira (TL)</label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      className="glass-input" 
+                      value={motorLeaseExpense}
+                      onChange={(e) => setMotorLeaseExpense(e.target.value)}
+                      required
+                      min="0"
+                    />
+                  </div>
+                </div>
 
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={saving}>
-                    {saving ? 'Kaydediliyor...' : 'Kaydet'}
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary" 
+                    style={{ flex: 2 }}
+                    disabled={saving}
+                  >
+                    {saving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
                   </button>
+                  
                   {selectedDay.log && (
-                    <button type="button" onClick={handleDeleteLog} className="btn btn-danger" disabled={deleting}>
+                    <button 
+                      type="button" 
+                      onClick={handleDeleteLog}
+                      className="btn btn-secondary" 
+                      style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                      disabled={deleting}
+                    >
                       {deleting ? 'Siliniyor...' : 'Sil'}
                     </button>
                   )}
                 </div>
+
               </form>
             </div>
           ) : (
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '260px', padding: '2rem', textAlign: 'center', border: '1px dashed var(--border-light)' }}>
-              <div style={{ fontSize: '2.5rem', marginBottom: '1rem', opacity: 0.7 }}>📅</div>
-              <h4 style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '0.5rem' }}>Günlük Veri Girişi</h4>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                Çalışma saatlerinizi ve teslim ettiğiniz sipariş sayılarını girmek, güncellemek veya silmek için soldaki takvimden bir gün seçin.
-              </p>
+            <div style={{ display: 'flex', height: '100%', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <span style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>👈</span>
+              <p>Çalışma saati, paket sayısı ve yakıt/kira giderlerinizi eklemek veya düzenlemek için sol taraftaki takvimden bir gün seçin.</p>
             </div>
           )}
         </div>
 
-      </div>
-      
-      <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-        Takvime veri ekledikten veya güncelledikten sonra üst menüden **Gösterge Paneli (Dashboard)** sekmesine geçerek aylık kümülatif kazancınızı ve kesinti detaylarınızı test edin.
       </div>
     </div>
   );

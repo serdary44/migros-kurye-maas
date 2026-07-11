@@ -20,8 +20,9 @@ export default function QuickCalc() {
   const [food0_4, setFood0_4] = useState(124);
   const [food4_6, setFood4_6] = useState(22);
   const [food6plus, setFood6plus] = useState(2);
+  const [extraPremiumsInput, setExtraPremiumsInput] = useState(0);
   
-  // Configuration inputs (can be toggled open)
+  // Configuration inputs
   const [showConfig, setShowConfig] = useState(false);
   const [hourlyRate, setHourlyRate] = useState(DEFAULT_HOURLY_RATE);
   const [senioritySupport, setSenioritySupport] = useState(DEFAULT_SENIORITY_SUPPORT);
@@ -29,7 +30,15 @@ export default function QuickCalc() {
   const [duesInstallments, setDuesInstallments] = useState(DEFAULT_DUES_INSTALLMENTS);
   const [vatRate, setVatRate] = useState(DEFAULT_VAT_RATE);
   const [withholdingRate, setWithholdingRate] = useState(DEFAULT_WITHHOLDING_RATE);
-  const [packetPremiumRate, setPacketPremiumRate] = useState(0.50);
+
+  // Document metadata states for receipt styling
+  const [workingYear, setWorkingYear] = useState('2');
+  const [startDate, setStartDate] = useState('04.2024');
+  const [region, setRegion] = useState('ANKARA');
+  const [customer, setCustomer] = useState('HEMEN');
+  const [vehicle, setVehicle] = useState('HONDA');
+  const [invoiceNote, setInvoiceNote] = useState('HAZİRAN MOTOR HAK EDİŞ BEDELİ');
+  const [invoiceNote2, setInvoiceNote2] = useState('eren.atasever@pakettaxi.com.tr');
 
   // Memoized calculations
   const results = useMemo(() => {
@@ -49,23 +58,23 @@ export default function QuickCalc() {
       dues_installments: duesInstallments,
       vat_rate: vatRate,
       withholding_rate: withholdingRate,
-      packet_premium_rate: packetPremiumRate,
-      monthly_extra_hours: monthlyExtraHours
+      monthly_extra_hours: monthlyExtraHours,
+      monthly_extra_premiums: extraPremiumsInput
     };
 
     return calculateFromMonthlyAverages(monthlyData, settings);
   }, [
-    daysWorked, totalHours, monthlyExtraHours,
+    daysWorked, totalHours, monthlyExtraHours, extraPremiumsInput,
     marketPackages, food0_4, food4_6, food6plus,
     hourlyRate, senioritySupport, reliefFund, duesInstallments,
-    vatRate, withholdingRate, packetPremiumRate
+    vatRate, withholdingRate
   ]);
 
   const totalPackages = marketPackages + food0_4 + food4_6 + food6plus;
 
   // Format helper
   const formatCurrency = (val) => {
-    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val);
+    return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val || 0);
   };
 
   return (
@@ -75,11 +84,11 @@ export default function QuickCalc() {
           Hızlı Maaş Hesaplama Paneli
         </h2>
         <p style={{ color: 'var(--text-muted)' }}>
-          Giriş yapmadan, sadece bu ayki toplam verilerinizi girerek KDV, Tevkifat ve tüm kesintiler sonrası banka hesabınıza yatacak net ücreti kuruşu kuruşuna hesaplayın.
+          Giriş yapmadan, sadece bu ayki toplam verilerinizi girerek KDV, Tevkifat ve tüm kesintiler sonrası banka hesabınıza yatacak net ücreti faturanızla birebir formatta hesaplayın.
         </p>
       </div>
 
-      <div className="dashboard-grid">
+      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr', gap: '2rem' }}>
         {/* Left Column: Inputs */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
@@ -114,37 +123,42 @@ export default function QuickCalc() {
               </div>
             </div>
 
-            <div className="form-group" style={{ marginTop: '0.5rem' }}>
-              <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>Aylık Ekstra Mesai (Saat)</span>
-                <span style={{ color: 'var(--primary)', textTransform: 'none', fontWeight: 500 }}>*Migros'un ayrıca eklediği saatler</span>
-              </label>
-              <input 
-                type="number" 
-                step="0.5"
-                className="glass-input" 
-                value={monthlyExtraHours}
-                onChange={(e) => setMonthlyExtraHours(Math.max(0, parseFloat(e.target.value) || 0))}
-                min="0"
-                placeholder="Örn: 4.5"
-              />
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                12 saat sınırı dışındaki ekstra mesaileriniz burada belirttiğiniz saat kadar saatlik ücretle çarpılarak Sabit Gelirlerinize eklenecektir.
-              </span>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
+              <div className="form-group">
+                <label className="form-label">Aylık Ekstra Mesai (Saat)</label>
+                <input 
+                  type="number" 
+                  step="0.5"
+                  className="glass-input" 
+                  value={monthlyExtraHours}
+                  onChange={(e) => setMonthlyExtraHours(Math.max(0, parseFloat(e.target.value) || 0))}
+                  min="0"
+                  placeholder="Örn: 4.5"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Aylık Diğer Primler (TL)</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="glass-input" 
+                  value={extraPremiumsInput}
+                  onChange={(e) => setExtraPremiumsInput(Math.max(0, parseFloat(e.target.value) || 0))}
+                  min="0"
+                  placeholder="Örn: 500"
+                />
+              </div>
             </div>
+            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.5rem' }}>
+              Ekstra mesailer saatlik ücretle çarpılarak Sabit Çalışma Gelirlerinize eklenecektir.
+            </span>
           </div>
 
           <div className="glass-card">
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ color: 'var(--primary)' }}>📦</span> Dağıtılan Paketler
             </h3>
-            
-            <div className="alert-box info" style={{ marginBottom: '1.25rem' }}>
-              <span>⚠️</span>
-              <div>
-                <strong>İptal Paket Bilgilendirmesi:</strong> İptal edilen paketler hak ediş veya bonus hesaplamalarına dahil edilmez. Lütfen sadece <strong>teslim edilen</strong> paket sayılarını girin.
-              </div>
-            </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div className="form-group">
@@ -209,12 +223,43 @@ export default function QuickCalc() {
               className="btn btn-secondary" 
               style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
             >
-              <span>⚙️ Gelişmiş Parametreleri Düzenle</span>
+              <span>⚙️ Fatura Parametreleri ve Notları</span>
               <span>{showConfig ? '▲' : '▼'}</span>
             </button>
 
             {showConfig && (
               <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border-light)', paddingTop: '1.25rem' }}>
+                
+                <h4 style={{ color: 'var(--primary-glow)', margin: '0 0 0.5rem 0', fontSize: '0.9rem' }}>Fatura Notları & Bilgileri</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Çalışma Yılı / Giriş Tarihi</label>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <input type="text" className="glass-input" value={workingYear} onChange={(e) => setWorkingYear(e.target.value)} style={{ width: '60px' }} />
+                      <input type="text" className="glass-input" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Bölge / Araç / Müşteri</label>
+                    <div style={{ display: 'flex', gap: '0.25rem' }}>
+                      <input type="text" className="glass-input" value={region} onChange={(e) => setRegion(e.target.value)} placeholder="ANKARA" />
+                      <input type="text" className="glass-input" value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="HONDA" style={{ width: '80px' }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label">Fatura Notu 1</label>
+                    <input type="text" className="glass-input" value={invoiceNote} onChange={(e) => setInvoiceNote(e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Fatura Notu 2</label>
+                    <input type="text" className="glass-input" value={invoiceNote2} onChange={(e) => setInvoiceNote2(e.target.value)} />
+                  </div>
+                </div>
+
+                <h4 style={{ color: 'var(--primary-glow)', margin: '0.5rem 0 0.5rem 0', fontSize: '0.9rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>Oran ve Kesinti Ayarları</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
                   <div className="form-group">
                     <label className="form-label">Saatlik Ücret (TL)</label>
@@ -271,7 +316,7 @@ export default function QuickCalc() {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Tevkifat Oranı (2/10 = %20)</label>
+                    <label className="form-label">Tevkifat Oranı (%)</label>
                     <input 
                       type="number" 
                       className="glass-input" 
@@ -280,132 +325,244 @@ export default function QuickCalc() {
                     />
                   </div>
                 </div>
-
-                <div className="form-group">
-                  <label className="form-label">Paket Başı Ek Prim (TL/pkt)</label>
-                  <input 
-                    type="number" 
-                    step="0.001"
-                    className="glass-input" 
-                    value={packetPremiumRate}
-                    onChange={(e) => setPacketPremiumRate(Math.max(0, parseFloat(e.target.value) || 0))}
-                  />
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    Faturadaki "Migros Paketbaşı Primi" için paket başına ek ödeme (Varsayılan: 0.50 TL)
-                  </span>
-                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Right Column: Results */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        {/* Right Column: Simulated Official Mutabakat Invoice */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           
-          {/* Main Net Pay Card */}
-          <div className="glass-card" style={{ background: 'linear-gradient(135deg, hsla(222, 47%, 11%, 0.9) 0%, hsla(25, 100%, 50%, 0.05) 100%)', borderColor: 'rgba(255, 111, 0, 0.2)' }}>
-            <span className="stat-label" style={{ color: 'var(--primary)' }}>Hesaba Yatacak Net Tutar</span>
-            <div className="stat-value success" style={{ fontSize: '2.5rem', margin: '0.5rem 0', textShadow: '0 0 20px rgba(74, 222, 128, 0.2)' }}>
-              {formatCurrency(results.netPayable)}
+          <div className="glass-card" style={{ padding: '2rem 1.5rem', background: '#ffffff', color: '#111827', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+            
+            {/* Mutabakat Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111827', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ fontSize: '1.2rem', cursor: 'pointer' }}>◀</span>
+                <span style={{ fontSize: '1.25rem', fontWeight: 700, color: '#111827' }}>Mutabakat</span>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.8rem', color: '#6b7280', fontWeight: 600 }}>HAZİRAN HAKEDİŞ</div>
+              </div>
             </div>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              KDV (%{vatRate}) eklenmiş, Tevkifat (%{withholdingRate}) ve {formatCurrency(duesInstallments)} Aidat/Taksit düşülmüş net banka hak edişidir.
-            </p>
-          </div>
 
-          {/* Detailed Breakdown Card */}
-          <div className="glass-card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
-              📄 Hak Ediş Detayları (KDV Hariç)
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem' }}>
+            <div style={{ fontSize: '0.85rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+                <span style={{ fontWeight: 600, color: '#374151' }}>Firma / Tedarikçi</span>
+                <span style={{ color: '#4b5563', textAlign: 'right', maxWidth: '240px', fontSize: '0.8rem' }}>Paket Lojistik Ve Teknoloji Anoni...</span>
+              </div>
               
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Günlük/Online Sabit Gelir:</span>
-                <span style={{ fontWeight: 600 }}>{formatCurrency(results.cumulativeFixedIncome)}</span>
-              </div>
-
-              {results.monthlyExtraHours > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', background: 'rgba(255, 111, 0, 0.05)', padding: '4px var(--radius-sm)', borderRadius: '4px' }}>
-                  <span style={{ color: 'var(--primary)', fontWeight: 500 }}>Ekstra Mesai Geliri ({results.monthlyExtraHours} sa):</span>
-                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{formatCurrency(results.extraHoursIncome)}</span>
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '1rem 0 0.5rem 0' }}>Bilgiler</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Çalışma Yılı</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{workingYear}</span>
                 </div>
-              )}
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>İşe Giriş Tarihi</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{startDate} 00:00:00</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Bölg.</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{region}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Müşt</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{customer}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Ücret</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>SABİT</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Araç</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{vehicle}</span>
+                </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Günlük Paket Primi Toplamı:</span>
-                <span style={{ fontWeight: 600 }}>{formatCurrency(results.cumulativeDailyPremium)}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.5rem' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Paket Sayısı</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{totalPackages}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Çalışma Gün Sayısı</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Toplam Çalışma Gün Sayısı</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{daysWorked}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Hemen Mesai Sayısı</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{results.grandTotalHours}</span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Yemek Mesafe Desteği:</span>
-                <span style={{ fontWeight: 600 }}>{formatCurrency(results.cumulativeDistanceSupport)}</span>
+              {/* Allowances Section */}
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '1.5rem 0 0.5rem 0', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>Ödenekler</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Paket Başı Gelirleri(Kdv : Hariçtir )</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.cumulativeDailyPremium)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Sabit Çalışma Gelirleri(Kdv Hariçtir )</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.totalFixedIncome)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Kidem Destek 2.yıl (Kdv Hariçtir )</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.senioritySupport)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Bonus(Kdv Hariçtir )</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.monthlyBonus)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Migros Paketbaşı Primi(Kdv Hariçtir )</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.migrosPacketPremium)}</span>
+                </div>
+                {results.monthlyExtraPremiums > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#6b7280', minWidth: '180px' }}>Aylık Diğer Primler(Kdv Hariçtir )</span>
+                    <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                    <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.monthlyExtraPremiums)}</span>
+                  </div>
+                )}
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Aylık Paket Bonusu ({totalPackages} paket):</span>
-                <span style={{ fontWeight: 600, color: 'var(--secondary)' }}>{formatCurrency(results.monthlyBonus)}</span>
+              {/* Deductions Section */}
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '1.5rem 0 0.5rem 0', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>Kesintiler</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Yardim Fonu(Kdv Hariçtir )</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600 }}>{formatCurrency(results.reliefFund)}</span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Kıdem Desteği:</span>
-                <span style={{ fontWeight: 600 }}>{formatCurrency(results.senioritySupport)}</span>
+              {/* Offset Section */}
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '1.5rem 0 0.5rem 0', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>Mahsup Edilenler</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Aidat & Taksit</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.duesInstallments)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e5e7eb', paddingTop: '0.35rem', fontWeight: 700 }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Toplam Mahsup Edilen</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', color: '#111827' }}>{formatCurrency(results.duesInstallments)}</span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Migros Paketbaşı Primi:</span>
-                <span style={{ fontWeight: 600 }}>{formatCurrency(results.migrosPacketPremium)}</span>
+              {/* Warning Alert Box */}
+              <div style={{
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                background: 'rgba(239, 68, 68, 0.04)',
+                borderRadius: '6px',
+                padding: '0.5rem 0.75rem',
+                color: '#ef4444',
+                fontSize: '0.75rem',
+                display: 'flex',
+                gap: '0.5rem',
+                alignItems: 'center',
+                marginTop: '0.75rem',
+                marginBottom: '1rem',
+                lineHeight: '1.3'
+              }}>
+                <span style={{ fontSize: '0.9rem' }}>ⓘ</span>
+                <div>Bu tutarlar, iş ortağınız tarafından geçici olarak mahsup edilen ve daha sonra fatura edilecek veya iade edilecek tutarlardır.</div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: '0.75rem', fontWeight: 700 }}>
-                <span>Toplam Brüt Kazanç:</span>
-                <span>{formatCurrency(results.grossEarnings)}</span>
+              {/* Invoice Note Section */}
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '1rem 0 0.5rem 0', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>Fatura Notu</h4>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Fatura Notu</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827', fontSize: '0.8rem' }}>{invoiceNote}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#6b7280', minWidth: '180px' }}>Fatura Notu 2</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827', fontSize: '0.8rem' }}>{invoiceNote2}</span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--error)' }}>
-                <span>Yardım Fonu Kesintisi:</span>
-                <span>-{formatCurrency(results.reliefFund)}</span>
+              {/* Totals Section */}
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '1.5rem 0 0.5rem 0', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>Toplam</h4>
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '0.4rem', 
+                padding: '0.75rem 1rem', 
+                background: '#f3f4f6', 
+                borderRadius: '8px', 
+                border: '1px solid #e5e7eb'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#4b5563', minWidth: '180px' }}>Tutar</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.netEarningsPreVat)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#4b5563', minWidth: '180px' }}>Kdv Tutarı %{vatRate}</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.vatAmount)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dotted #d1d5db', paddingTop: '0.35rem' }}>
+                  <span style={{ color: '#4b5563', minWidth: '180px' }}>Kdv Dahil Toplam Tutar</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600, color: '#111827' }}>{formatCurrency(results.vatIncludedAmount)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: '#ef4444' }}>
+                  <span style={{ color: '#4b5563', minWidth: '180px' }}>Tevkifat Tutarı</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', fontWeight: 600 }}>-{formatCurrency(results.withholdingAmount)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #d1d5db', paddingTop: '0.4rem', fontWeight: 700 }}>
+                  <span style={{ color: '#111827', minWidth: '180px' }}>Toplam Tutar</span>
+                  <span style={{ width: '20px', textAlign: 'center', color: '#9ca3af' }}>:</span>
+                  <span style={{ flex: 1, textAlign: 'right', color: '#111827' }}>{formatCurrency(results.invoiceTotal)}</span>
+                </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: '0.75rem', fontWeight: 700, color: 'var(--primary)' }}>
-                <span>Fatura Tutar Matrahı (Net Tutar):</span>
-                <span>{formatCurrency(results.netEarningsPreVat)}</span>
+              {/* Total Payout Section */}
+              <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#111827', margin: '1.5rem 0 0.5rem 0' }}>Toplam Ödenecek</h4>
+              <div style={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                padding: '1rem', 
+                background: '#e0f2fe', 
+                borderRadius: '8px', 
+                border: '1px solid #bae6fd',
+                fontWeight: 700,
+                fontSize: '1rem'
+              }}>
+                <span style={{ color: '#0369a1', minWidth: '180px' }}>Ödenecek Tutar</span>
+                <span style={{ width: '20px', textAlign: 'center', color: '#0369a1' }}>:</span>
+                <span style={{ flex: 1, textAlign: 'right', color: '#0284c7' }}>{formatCurrency(results.netPayable)}</span>
               </div>
+
             </div>
           </div>
-
-          {/* Tax Breakdown Card */}
-          <div className="glass-card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.25rem', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.75rem' }}>
-              🏛️ KDV & Tevkifat Hesabı
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>KDV Hesabı (%{vatRate}):</span>
-                <span style={{ fontWeight: 600, color: 'var(--success)' }}>+{formatCurrency(results.vatAmount)}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Tevkifat (%{withholdingRate} - KDV'nin 2/10'u):</span>
-                <span style={{ fontWeight: 600, color: 'var(--error)' }}>-{formatCurrency(results.withholdingAmount)}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                <span>Tevkifat Sonrası Fatura Toplamı:</span>
-                <span>{formatCurrency(results.invoiceTotal)}</span>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--error)', borderTop: '1px solid var(--border-light)', paddingTop: '0.75rem' }}>
-                <span>Aidat & Motor Taksiti (Mahsup Edilen):</span>
-                <span>-{formatCurrency(results.duesInstallments)}</span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ textAlign: 'center', padding: '0.5rem', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            Lütfen hesaplanan bu değerlerin doğruluğunu faturanızla manuel olarak karşılaştırarak test edin.
+          
+          <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            Yukarıdaki döküm faturanızla kuruşu kuruşuna eşleşmek üzere tasarlanmıştır.
           </div>
         </div>
       </div>

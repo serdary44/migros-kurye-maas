@@ -1,7 +1,15 @@
 import React from 'react';
 import { supabase } from '../supabase/supabaseClient.js';
 
-export default function Layout({ children, currentTab, setCurrentTab, session }) {
+export default function Layout({ 
+  children, 
+  currentTab, 
+  setCurrentTab, 
+  session,
+  couriers = [],
+  selectedCourierId = '',
+  onCourierChange
+}) {
   const handleLogout = async () => {
     if (window.confirm("Çıkış yapmak istediğinize emin misiniz?")) {
       await supabase.auth.signOut();
@@ -43,6 +51,32 @@ export default function Layout({ children, currentTab, setCurrentTab, session })
           ) : (
             // Authenticated Navigation Links
             <>
+              {couriers && couriers.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', marginRight: '0.5rem' }}>
+                  <select
+                    value={selectedCourierId}
+                    onChange={(e) => onCourierChange && onCourierChange(e.target.value)}
+                    className="glass-input"
+                    style={{
+                      padding: '0.35rem 0.75rem',
+                      fontSize: '0.85rem',
+                      borderRadius: 'var(--radius-sm)',
+                      width: 'auto',
+                      border: '1px solid var(--border-light)',
+                      background: 'rgba(30, 41, 59, 0.7)',
+                      color: 'var(--text-main)',
+                      cursor: 'pointer',
+                      outline: 'none',
+                    }}
+                  >
+                    {couriers.map(c => (
+                      <option key={c.id} value={c.id} style={{ background: '#0d111c', color: '#f8fafc' }}>
+                        👤 {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <button 
                 onClick={() => setCurrentTab('dashboard')}
                 className={`nav-btn ${currentTab === 'dashboard' ? 'active' : ''}`}
@@ -59,7 +93,7 @@ export default function Layout({ children, currentTab, setCurrentTab, session })
                 onClick={() => setCurrentTab('settings')}
                 className={`nav-btn ${currentTab === 'settings' ? 'active' : ''}`}
               >
-                Ayarlar
+                Kuryeler & Oranlar
               </button>
               
               {/* User Email Badge */}

@@ -6,14 +6,15 @@ import Auth from './components/Auth.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import Calendar from './components/Calendar.jsx';
 import Settings from './components/Settings.jsx';
-import { DEFAULT_HOURLY_RATE } from './utils/constants.js';
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentTab, setCurrentTab] = useState('quickCalc');
+  const [couriers, setCouriers] = useState([]);
+  const [selectedCourierId, setSelectedCourierId] = useState('');
+  const [selectedCourier, setSelectedCourier] = useState(null);
   const [logs, setLogs] = useState([]);
-  const [hourlyRate, setHourlyRate] = useState(DEFAULT_HOURLY_RATE);
 
   // Handle auth session state changes
   useEffect(() => {
@@ -21,10 +22,12 @@ export default function App() {
       setSession(session);
       if (session) {
         setCurrentTab('dashboard');
-        fetchLogs(session.user.id);
-        fetchProfile(session.user.id);
+        fetchCouriers(session.user.id);
       } else {
         setCurrentTab('quickCalc');
+        setCouriers([]);
+        setSelectedCourierId('');
+        setSelectedCourier(null);
         setLogs([]);
       }
       setLoading(false);
@@ -36,10 +39,12 @@ export default function App() {
       setSession(session);
       if (session) {
         setCurrentTab('dashboard');
-        fetchLogs(session.user.id);
-        fetchProfile(session.user.id);
+        fetchCouriers(session.user.id);
       } else {
         setCurrentTab('quickCalc');
+        setCouriers([]);
+        setSelectedCourierId('');
+        setSelectedCourier(null);
         setLogs([]);
       }
       setLoading(false);
@@ -48,16 +53,55 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch all user daily logs
-  const fetchLogs = async (userId) => {
+  // Fetch couriers list
+  const fetchCouriers = async (userId) => {
     const uid = userId || session?.user?.id;
     if (!uid) return;
+
+    try {
+      let { data, error } = await supabase
+        .from('couriers')
+        .select('*')
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      // Fallback: If no couriers exist yet, create a default one
+      if (!data || data.length === 0) {
+        const { data: newCourier, error: insertError } = await supabase
+          .from('couriers')
+          .insert([{ manager_id: uid, name: 'Benim Profilim' }])
+          .select();
+
+        if (insertError) throw insertError;
+        data = newCourier || [];
+      }
+
+      setCouriers(data);
+      
+      // Select the first courier by default or keep existing selection
+      if (data.length > 0) {
+        const defaultId = data[0].id;
+        setSelectedCourierId(prevId => {
+          const exists = data.some(c => c.id === prevId);
+          const nextId = exists ? prevId : defaultId;
+          return nextId;
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching couriers:', error.message);
+    }
+  };
+
+  // Fetch logs for selected courier
+  const fetchLogs = async (courierId) => {
+    if (!courierId) return;
 
     try {
       const { data, error } = await supabase
         .from('daily_logs')
         .select('*')
-        .eq('user_id', uid)
+        .eq('courier_id', courierId)
         .order('log_date', { ascending: true });
 
       if (error) throw error;
@@ -67,31 +111,20 @@ export default function App() {
     }
   };
 
-  // Fetch hourly rate specifically for calendar drawing
-  const fetchProfile = async (userId) => {
-    const uid = userId || session?.user?.id;
-    if (!uid) return;
-
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('hourly_rate')
-        .eq('id', uid)
-        .single();
-
-      if (error) throw error;
-      if (data) {
-        setHourlyRate(data.hourly_rate ?? DEFAULT_HOURLY_RATE);
+  // Effect to update selected courier object and fetch their logs
+  useEffect(() => {
+    if (selectedCourierId && couriers.length > 0) {
+      const courier = couriers.find(c => c.id === selectedCourierId);
+      if (courier) {
+        setSelectedCourier(courier);
+        fetchLogs(selectedCourierId);
       }
-    } catch (error) {
-      console.error('Error fetching profile settings:', error.message);
     }
-  };
+  }, [selectedCourierId, couriers]);
 
   const handleRefreshData = () => {
     if (session?.user?.id) {
-      fetchLogs(session.user.id);
-      fetchProfile(session.user.id);
+      fetchCouriers(session.user.id);
     }
   };
 
@@ -115,7 +148,6 @@ export default function App() {
   // Render tab content depending on session status
   const renderTabContent = () => {
     if (!session) {
-      // Unauthenticated views
       switch (currentTab) {
         case 'quickCalc':
           return <QuickCalc />;
@@ -125,12 +157,20 @@ export default function App() {
           return <QuickCalc />;
       }
     } else {
-      // Authenticated views
+      if (!selectedCourier) {
+        return (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+            Lütfen bir kurye profili seçin veya oluşturun.
+          </div>
+        );
+      }
+
       switch (currentTab) {
         case 'dashboard':
           return (
             <Dashboard 
               session={session} 
+              selectedCourier={selectedCourier}
               logs={logs} 
               onRefreshLogs={handleRefreshData} 
             />
@@ -139,21 +179,27 @@ export default function App() {
           return (
             <Calendar 
               session={session} 
+              selectedCourier={selectedCourier}
               logs={logs} 
               onLogChange={handleRefreshData}
-              hourlyRate={hourlyRate}
+              hourlyRate={selectedCourier.hourly_rate}
             />
           );
         case 'settings':
           return (
             <Settings 
               session={session} 
+              couriers={couriers}
+              selectedCourier={selectedCourier}
+              onRefreshCouriers={handleRefreshData}
+              setSelectedCourierId={setSelectedCourierId}
             />
           );
         default:
           return (
             <Dashboard 
               session={session} 
+              selectedCourier={selectedCourier}
               logs={logs} 
               onRefreshLogs={handleRefreshData} 
             />
@@ -167,6 +213,9 @@ export default function App() {
       currentTab={currentTab} 
       setCurrentTab={setCurrentTab} 
       session={session}
+      couriers={couriers}
+      selectedCourierId={selectedCourierId}
+      onCourierChange={setSelectedCourierId}
     >
       {renderTabContent()}
     </Layout>

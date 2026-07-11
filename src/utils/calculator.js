@@ -41,6 +41,8 @@ export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_P
   const food0_4 = parseInt(log.food_packages_0_4 || 0);
   const food4_6 = parseInt(log.food_packages_4_6 || 0);
   const food6plus = parseInt(log.food_packages_6plus || 0);
+  const fuelExpense = parseFloat(log.fuel_expense || 0);
+  const motorLeaseExpense = parseFloat(log.motor_lease_expense || 0);
 
   const totalPackages = market + food0_4 + food4_6 + food6plus;
   
@@ -70,7 +72,10 @@ export function calculateDailyLog(log, hourlyRate = 177, dailyBrackets = DAILY_P
     dailyPremium,
     distanceSupport: parseFloat(distanceSupport.toFixed(4)),
     fixedIncome,
-    dailyTotalNet: parseFloat(dailyTotalNet.toFixed(4))
+    dailyTotalNet: parseFloat(dailyTotalNet.toFixed(4)),
+    fuelExpense,
+    motorLeaseExpense,
+    totalDailyExpense: fuelExpense + motorLeaseExpense
   };
 }
 
@@ -102,6 +107,8 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   let totalFood4_6 = 0;
   let totalFood6plus = 0;
   let totalPackages = 0;
+  let totalFuelExpense = 0;
+  let totalMotorLeaseExpense = 0;
   
   let cumulativeFixedIncome = 0;
   let cumulativeDailyPremium = 0;
@@ -115,6 +122,8 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
     totalFood4_6 += calc.food4_6;
     totalFood6plus += calc.food6plus;
     totalPackages += calc.totalPackages;
+    totalFuelExpense += calc.fuelExpense;
+    totalMotorLeaseExpense += calc.motorLeaseExpense;
     
     cumulativeFixedIncome += calc.fixedIncome;
     cumulativeDailyPremium += calc.dailyPremium;
@@ -161,6 +170,10 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   // Payout after motor dues / installments (Net Ele Gecen)
   const netPayable = invoiceTotal - duesInstallments;
 
+  // Operational Expenses and Net Profit
+  const totalExpenses = totalFuelExpense + totalMotorLeaseExpense;
+  const netProfit = netPayable - totalExpenses;
+
   return {
     daysWorked: logs.length,
     totalHours: parseFloat(totalHours.toFixed(2)),
@@ -171,6 +184,9 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
     totalFood4_6,
     totalFood6plus,
     totalPackages,
+    totalFuelExpense: parseFloat(totalFuelExpense.toFixed(2)),
+    totalMotorLeaseExpense: parseFloat(totalMotorLeaseExpense.toFixed(2)),
+    totalExpenses: parseFloat(totalExpenses.toFixed(2)),
     cumulativeFixedIncome: parseFloat(cumulativeFixedIncome.toFixed(2)),
     extraHoursIncome: parseFloat(extraHoursIncome.toFixed(2)),
     totalFixedIncome: parseFloat(totalFixedIncome.toFixed(2)),
@@ -188,6 +204,7 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
     invoiceTotal: parseFloat(invoiceTotal.toFixed(2)),
     duesInstallments: parseFloat(duesInstallments.toFixed(2)),
     netPayable: parseFloat(netPayable.toFixed(2)),
+    netProfit: parseFloat(netProfit.toFixed(2)),
     calculatedDailyLogs
   };
 }
@@ -206,12 +223,16 @@ export function calculateFromMonthlyAverages(monthlyData, settings = {}) {
   const food0_4 = parseInt(monthlyData.food_packages_0_4 ?? 0);
   const food4_6 = parseInt(monthlyData.food_packages_4_6 ?? 0);
   const food6plus = parseInt(monthlyData.food_packages_6plus ?? 0);
+  const fuel = parseFloat(monthlyData.total_fuel_expense ?? 0);
+  const motorLease = parseFloat(monthlyData.total_motor_lease_expense ?? 0);
 
   const avgHours = hours / days;
   const avgMarket = market / days;
   const avgFood0_4 = food0_4 / days;
   const avgFood4_6 = food4_6 / days;
   const avgFood6plus = food6plus / days;
+  const avgFuel = fuel / days;
+  const avgMotorLease = motorLease / days;
 
   const mockLogs = [];
   for (let i = 0; i < days; i++) {
@@ -221,7 +242,9 @@ export function calculateFromMonthlyAverages(monthlyData, settings = {}) {
       market_packages: avgMarket,
       food_packages_0_4: avgFood0_4,
       food_packages_4_6: avgFood4_6,
-      food_packages_6plus: avgFood6plus
+      food_packages_6plus: avgFood6plus,
+      fuel_expense: avgFuel,
+      motor_lease_expense: avgMotorLease
     });
   }
 
