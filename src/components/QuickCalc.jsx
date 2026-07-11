@@ -13,7 +13,6 @@ export default function QuickCalc() {
   // Input states (initialized empty as requested by user)
   const [daysWorked, setDaysWorked] = useState('');
   const [totalHours, setTotalHours] = useState('');
-  const [monthlyExtraHours, setMonthlyExtraHours] = useState('');
   
   // Package inputs
   const [marketPackages, setMarketPackages] = useState(''); // Normal packages (Market + Yemek 0-4 Km)
@@ -56,13 +55,12 @@ export default function QuickCalc() {
       dues_installments: duesInstallments,
       vat_rate: vatRate,
       withholding_rate: withholdingRate,
-      monthly_extra_hours: parseFloat(monthlyExtraHours) || 0,
       monthly_extra_premiums: parseFloat(extraPremiumsInput) || 0
     };
 
     return calculateFromMonthlyAverages(monthlyData, settings);
   }, [
-    daysWorked, totalHours, monthlyExtraHours, extraPremiumsInput,
+    daysWorked, totalHours, extraPremiumsInput,
     marketPackages, food4_6, food6plus,
     hourlyRate, senioritySupport, reliefFund, duesInstallments,
     vatRate, withholdingRate
@@ -120,19 +118,7 @@ export default function QuickCalc() {
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-              <div className="form-group">
-                <label className="form-label">Aylık Ekstra Mesai (Saat)</label>
-                <input 
-                  type="number" 
-                  step="0.5"
-                  className="glass-input" 
-                  value={monthlyExtraHours}
-                  onChange={(e) => setMonthlyExtraHours(e.target.value)}
-                  placeholder="Örn: 4.5"
-                />
-              </div>
-
+            <div style={{ marginTop: '0.5rem' }}>
               <div className="form-group">
                 <label className="form-label">Aylık Diğer Primler (TL)</label>
                 <input 
@@ -145,9 +131,6 @@ export default function QuickCalc() {
                 />
               </div>
             </div>
-            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'block', marginTop: '0.5rem' }}>
-              Ekstra mesailer saatlik ücretle çarpılarak Sabit Çalışma Gelirlerinize eklenecektir.
-            </span>
           </div>
 
           <div className="glass-card">

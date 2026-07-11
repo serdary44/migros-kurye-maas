@@ -92,7 +92,6 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   const duesInstallments = parseFloat(settings.dues_installments ?? 1200);
   const vatRate = parseFloat(settings.vat_rate ?? 20);
   const withholdingRate = parseFloat(settings.withholding_rate ?? 20); // 2/10 is 20%
-  const monthlyExtraHours = parseFloat(settings.monthly_extra_hours ?? 0); // User entered manual overtime hours
   const monthlyExtraPremiums = parseFloat(settings.monthly_extra_premiums ?? 0); // Flat monthly extra premiums (e.g. June Migros Paketbaşı Primi)
 
   const dailyBrackets = customBrackets.dailyPremiumBrackets || DAILY_PREMIUM_BRACKETS;
@@ -128,10 +127,10 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
     return calc;
   });
 
-  // Calculate extra overtime income
-  const extraHoursIncome = monthlyExtraHours * hourlyRate;
-  const totalFixedIncome = cumulativeFixedIncome + extraHoursIncome;
-  const grandTotalHours = totalHours + monthlyExtraHours;
+  // Calculate extra overtime income (removed, user enters total directly)
+  const extraHoursIncome = 0;
+  const totalFixedIncome = cumulativeFixedIncome;
+  const grandTotalHours = totalHours;
 
   // Calculate monthly bonus
   const monthlyBonus = getMonthlyBonus(totalPackages, monthlyBrackets);
@@ -173,7 +172,7 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
   return {
     daysWorked: logs.length,
     totalHours: parseFloat(totalHours.toFixed(2)),
-    monthlyExtraHours: parseFloat(monthlyExtraHours.toFixed(2)),
+    monthlyExtraHours: 0,
     grandTotalHours: parseFloat(grandTotalHours.toFixed(2)),
     totalMarketPackages,
     totalFood4_6,
@@ -183,7 +182,7 @@ export function calculateMonthlyTotals(logs, settings = {}, customBrackets = {})
     totalMotorLeaseExpense: parseFloat(totalMotorLeaseExpense.toFixed(2)),
     totalExpenses: parseFloat(totalExpenses.toFixed(2)),
     cumulativeFixedIncome: parseFloat(cumulativeFixedIncome.toFixed(2)),
-    extraHoursIncome: parseFloat(extraHoursIncome.toFixed(2)),
+    extraHoursIncome: 0,
     totalFixedIncome: parseFloat(totalFixedIncome.toFixed(2)),
     cumulativeDailyPremium: parseFloat(cumulativeDailyPremium.toFixed(2)),
     cumulativeDistanceSupport: parseFloat(cumulativeDistanceSupport.toFixed(2)),

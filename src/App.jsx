@@ -4,7 +4,6 @@ import Layout from './components/Layout.jsx';
 import QuickCalc from './components/QuickCalc.jsx';
 import Auth from './components/Auth.jsx';
 import Dashboard from './components/Dashboard.jsx';
-import Calendar from './components/Calendar.jsx';
 import Settings from './components/Settings.jsx';
 
 export default function App() {
@@ -173,16 +172,6 @@ export default function App() {
               selectedCourier={selectedCourier}
               logs={logs} 
               onRefreshLogs={handleRefreshData} 
-            />
-          );
-        case 'calendar':
-          return (
-            <Calendar 
-              session={session} 
-              selectedCourier={selectedCourier}
-              logs={logs} 
-              onLogChange={handleRefreshData}
-              hourlyRate={selectedCourier.hourly_rate}
             />
           );
         case 'settings':

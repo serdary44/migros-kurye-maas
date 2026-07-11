@@ -1,12 +1,22 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../supabase/supabaseClient.js';
-import { calculateMonthlyTotals } from '../utils/calculator.js';
+import { calculateMonthlyTotals, calculateDailyLog } from '../utils/calculator.js';
 
 export default function Dashboard({ session, selectedCourier, logs = [], onRefreshLogs }) {
   const [currentDate, setCurrentDate] = useState(new Date());
   
-  // Extra hours and premiums input states
-  const [extraHoursInput, setExtraHoursInput] = useState('');
+  // Calendar states
+  const [selectedDay, setSelectedDay] = useState(null);
+  const [hoursWorked, setHoursWorked] = useState('');
+  const [marketPackages, setMarketPackages] = useState(''); // Normal packages (Market + Yemek 0-4 Km)
+  const [food4_6, setFood4_6] = useState('');
+  const [food6plus, setFood6plus] = useState('');
+  const [fuelExpense, setFuelExpense] = useState('');
+  const [motorLeaseExpense, setMotorLeaseExpense] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // Extra monthly flat premiums
   const [extraPremiumsInput, setExtraPremiumsInput] = useState('');
   const [savingData, setSavingData] = useState(false);
   const [message, setMessage] = useState('');
@@ -38,9 +48,9 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
   // Sync inputs with selected courier details
   useEffect(() => {
     if (selectedCourier) {
-      setExtraHoursInput(selectedCourier.monthly_extra_hours || '');
       setExtraPremiumsInput(selectedCourier.monthly_extra_premiums || '');
       setMessage('');
+      setSelectedDay(null);
     }
   }, [selectedCourier]);
 
@@ -58,7 +68,130 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
     return calculateMonthlyTotals(filteredLogs, selectedCourier);
   }, [filteredLogs, selectedCourier]);
 
-  // Save manual monthly extra hours and premiums
+  // Calendar calculations
+  const firstDayIndex = new Date(year, month, 1).getDay();
+  const adjustedFirstDayIndex = firstDayIndex === 0 ? 6 : firstDayIndex - 1;
+  const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Create list of days
+  const days = [];
+  for (let i = 0; i < adjustedFirstDayIndex; i++) {
+    days.push({ empty: true });
+  }
+  for (let i = 1; i <= totalDaysInMonth; i++) {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+    
+    // Find if there is an existing log for this day
+    const dayLog = filteredLogs.find(log => log.log_date === dateStr);
+    
+    // If log exists, calculate its earnings to show on calendar
+    let calc = null;
+    if (dayLog && selectedCourier) {
+      calc = calculateDailyLog(dayLog, selectedCourier.hourly_rate, undefined, selectedCourier.vat_rate);
+    }
+
+    days.push({
+      dayNumber: i,
+      dateStr,
+      log: dayLog,
+      calc
+    });
+  }
+
+  // Populate form if a day is clicked
+  const handleDayClick = (day) => {
+    if (day.empty) return;
+    setSelectedDay(day);
+
+    if (day.log) {
+      setHoursWorked(day.log.hours_worked ?? '');
+      setMarketPackages(day.log.market_packages ?? '');
+      setFood4_6(day.log.food_packages_4_6 ?? '');
+      setFood6plus(day.log.food_packages_6plus ?? '');
+      setFuelExpense(day.log.fuel_expense ?? '');
+      setMotorLeaseExpense(day.log.motor_lease_expense ?? '');
+    } else {
+      // Initialize with empty inputs (user requested empty boxes)
+      setHoursWorked('');
+      setMarketPackages('');
+      setFood4_6('');
+      setFood6plus('');
+      setFuelExpense('');
+      setMotorLeaseExpense('');
+    }
+  };
+
+  // Upsert daily log in DB
+  const handleSaveLog = async (e) => {
+    e.preventDefault();
+    if (!selectedCourier || !selectedDay) return;
+    
+    try {
+      setSaving(true);
+      const logData = {
+        courier_id: selectedCourier.id,
+        log_date: selectedDay.dateStr,
+        hours_worked: parseFloat(hoursWorked) || 0,
+        market_packages: parseInt(marketPackages) || 0,
+        food_packages_4_6: parseInt(food4_6) || 0,
+        food_packages_6plus: parseInt(food6plus) || 0,
+        fuel_expense: parseFloat(fuelExpense) || 0,
+        motor_lease_expense: parseFloat(motorLeaseExpense) || 0
+      };
+
+      let error;
+      if (selectedDay.log) {
+        // Update existing log
+        const { error: updateError } = await supabase
+          .from('daily_logs')
+          .update(logData)
+          .eq('id', selectedDay.log.id);
+        error = updateError;
+      } else {
+        // Insert new log
+        const { error: insertError } = await supabase
+          .from('daily_logs')
+          .insert([logData]);
+        error = insertError;
+      }
+
+      if (error) throw error;
+
+      onRefreshLogs();
+      setSelectedDay(null);
+    } catch (error) {
+      console.error('Error saving log:', error.message);
+      alert('Günlük veriler kaydedilirken hata oluştu: ' + error.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Delete daily log from DB
+  const handleDeleteLog = async () => {
+    if (!selectedDay?.log) return;
+    if (!window.confirm(`${selectedDay.dateStr} tarihli günlük veriyi silmek istediğinize emin misiniz?`)) return;
+
+    try {
+      setDeleting(true);
+      const { error } = await supabase
+        .from('daily_logs')
+        .delete()
+        .eq('id', selectedDay.log.id);
+
+      if (error) throw error;
+
+      onRefreshLogs();
+      setSelectedDay(null);
+    } catch (error) {
+      console.error('Error deleting log:', error.message);
+      alert('Gün silinirken hata oluştu.');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  // Save manual monthly extra premiums
   const handleSaveExtraData = async (e) => {
     e.preventDefault();
     if (!selectedCourier) return;
@@ -66,13 +199,11 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
     try {
       setSavingData(true);
       setMessage('');
-      const hours = parseFloat(extraHoursInput) || 0;
       const premiums = parseFloat(extraPremiumsInput) || 0;
 
       const { error } = await supabase
         .from('couriers')
         .update({ 
-          monthly_extra_hours: hours,
           monthly_extra_premiums: premiums
         })
         .eq('id', selectedCourier.id);
@@ -92,10 +223,12 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
 
   const prevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
+    setSelectedDay(null);
   };
 
   const nextMonth = () => {
     setCurrentDate(new Date(year, month + 1, 1));
+    setSelectedDay(null);
   };
 
   const formatCurrency = (val) => {
@@ -116,14 +249,15 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
           <h2 style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--primary)' }}>
-            📊 "{selectedCourier.name}" Gösterge Paneli
+            🗓️ "{selectedCourier.name}" Çalışma Takvimi & Hakediş Paneli
           </h2>
           <p style={{ color: 'var(--text-muted)' }}>
-            {monthYearStr} dönemi güncel durumunuz, gider takibiniz ve hak ediş analiziniz.
+            Takvimden gün seçerek çalışma saati ve paketlerinizi girin, sağ tarafta resmi faturanızın canlı dökümünü izleyin.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           <button onClick={prevMonth} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }}>◄ Önceki Ay</button>
+          <span style={{ fontWeight: 600, color: 'var(--text-main)', minWidth: '120px', textAlign: 'center' }}>{monthYearStr}</span>
           <button onClick={nextMonth} className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem' }}>Sonraki Ay ►</button>
         </div>
       </div>
@@ -145,63 +279,220 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
         <div className="glass-card stat-card" style={{ padding: '1rem' }}>
           <span className="stat-label">Toplam Çalışılan Gün / Süre</span>
           <span className="stat-value secondary" style={{ fontSize: '1.35rem' }}>{results.daysWorked} Gün / {results.grandTotalHours} Sa</span>
-          <span className="stat-desc">{results.totalHours} sa online + {results.monthlyExtraHours} sa ekstra</span>
+          <span className="stat-desc">{results.totalHours} sa toplam çalışma süresi</span>
         </div>
       </div>
 
       <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.5fr', gap: '2rem' }}>
         
-        {/* Left Column: Extra Data Form & Metadata Configuration */}
+        {/* Left Column: Calendar & Edit Day Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          {/* Extra Monthly Data Form */}
-          <div className="glass-card">
+          {/* Calendar Grid */}
+          <div className="glass-card" style={{ padding: '1.5rem' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem', color: 'var(--primary)' }}>
-              🕒 Aylık Ekstra Veri Girişi
+              📅 Günlük Veri Takvimi
             </h3>
             
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>
-              Uygulamaya yazmayan 12 saat üzeri ekstra mesai saatlerini ve June mutabakatındaki gibi diğer hak ediş dışı primleri buraya ekleyebilirsiniz:
-            </p>
+            {/* Days of week header */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.5rem', textAlign: 'center', fontWeight: 600, fontSize: '0.85rem', color: 'var(--primary)', marginBottom: '0.75rem' }}>
+              <div>Pzt</div>
+              <div>Sal</div>
+              <div>Çar</div>
+              <div>Per</div>
+              <div>Cum</div>
+              <div>Cmt</div>
+              <div>Paz</div>
+            </div>
 
-            <form onSubmit={handleSaveExtraData} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Ekstra Mesai Süresi (Saat)</label>
-                  <input 
-                    type="number" 
-                    step="0.1"
-                    className="glass-input"
-                    value={extraHoursInput}
-                    onChange={(e) => setExtraHoursInput(e.target.value)}
-                    min="0"
-                    placeholder="Örn: 12.5"
-                  />
-                </div>
+            {/* Calendar grid items */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '0.5rem' }}>
+              {days.map((day, index) => {
+                if (day.empty) {
+                  return <div key={`empty-${index}`} style={{ aspectRatio: '1.2', opacity: 0 }}></div>;
+                }
+
+                const isLogged = !!day.log;
+                const isSelected = selectedDay && selectedDay.dateStr === day.dateStr;
                 
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label className="form-label" style={{ fontSize: '0.8rem' }}>Diğer Ekstra Primler (TL)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    className="glass-input"
-                    value={extraPremiumsInput}
-                    onChange={(e) => setExtraPremiumsInput(e.target.value)}
-                    min="0"
-                    placeholder="Örn: 500"
-                  />
-                </div>
-              </div>
+                let background = 'rgba(255, 255, 255, 0.02)';
+                let border = '1px solid var(--border-light)';
+                if (isLogged) {
+                  background = 'rgba(249, 115, 22, 0.05)';
+                  border = '1px solid rgba(249, 115, 22, 0.3)';
+                }
+                if (isSelected) {
+                  border = '2px solid var(--primary)';
+                  background = 'rgba(249, 115, 22, 0.15)';
+                }
 
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.5rem' }}>
-                <span style={{ fontSize: '0.85rem', color: 'var(--success)', fontWeight: 500 }}>
-                  {message}
-                </span>
-                <button type="submit" className="btn btn-primary" disabled={savingData} style={{ padding: '0.5rem 1.5rem' }}>
-                  {savingData ? 'Kaydediliyor...' : 'Kaydet'}
-                </button>
+                return (
+                  <div 
+                    key={day.dateStr}
+                    onClick={() => handleDayClick(day)}
+                    style={{
+                      aspectRatio: '1.2',
+                      padding: '0.5rem',
+                      borderRadius: 'var(--radius-sm)',
+                      background,
+                      border,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      transition: 'all 0.2s ease',
+                    }}
+                    className="calendar-day"
+                  >
+                    <span style={{ 
+                      fontWeight: 700, 
+                      fontSize: '0.9rem',
+                      color: isLogged ? 'var(--text-main)' : 'var(--text-muted)'
+                    }}>
+                      {day.dayNumber}
+                    </span>
+                    
+                    {isLogged && day.calc && (
+                      <div style={{ display: 'flex', flexDirection: 'column', textAlign: 'right' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)' }}>
+                          {day.calc.totalPackages} Pkt
+                        </span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--success)' }}>
+                          {formatCurrency(day.calc.dailyTotalNet * (1 + selectedCourier.vat_rate / 100) - (day.calc.dailyTotalNet * selectedCourier.vat_rate / 100 * selectedCourier.withholding_rate / 100))}
+                        </span>
+                        {day.calc.totalDailyExpense > 0 && (
+                          <span style={{ fontSize: '0.65rem', color: '#ef4444' }}>
+                            -{formatCurrency(day.calc.totalDailyExpense)} Gdr
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Edit Panel (Visible only when selectedDay is active) */}
+          <div className="glass-card" style={{ padding: '1.5rem', minHeight: '120px' }}>
+            {selectedDay ? (
+              <div>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '1.25rem', color: 'var(--primary)', borderBottom: '1px solid var(--border-light)', paddingBottom: '0.5rem' }}>
+                  ✏️ {selectedDay.dateStr} Çalışma Detayları
+                </h3>
+                
+                <form onSubmit={handleSaveLog} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label">Çalışılan Süre (Saat)</label>
+                      <input 
+                        type="number" 
+                        step="0.5"
+                        className="glass-input" 
+                        value={hoursWorked}
+                        onChange={(e) => setHoursWorked(e.target.value)}
+                        placeholder="Saat Girin"
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label className="form-label">Normal Paketler (Market & 0-4 Km Yemek)</label>
+                      <input 
+                        type="number" 
+                        className="glass-input" 
+                        value={marketPackages}
+                        onChange={(e) => setMarketPackages(e.target.value)}
+                        placeholder="Normal Paket Toplamı"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Yemek (4-6 Km)</span>
+                        <span style={{ color: 'var(--success)' }}>+25 TL/pkt</span>
+                      </label>
+                      <input 
+                        type="number" 
+                        className="glass-input" 
+                        value={food4_6}
+                        onChange={(e) => setFood4_6(e.target.value)}
+                        placeholder="Örn: 22"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '0.75rem', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Yemek (+6 Km)</span>
+                        <span style={{ color: 'var(--success)' }}>+35 TL/pkt</span>
+                      </label>
+                      <input 
+                        type="number" 
+                        className="glass-input" 
+                        value={food6plus}
+                        onChange={(e) => setFood6plus(e.target.value)}
+                        placeholder="Örn: 2"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', borderTop: '1px solid var(--border-light)', paddingTop: '1rem' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#f87171' }}>Günlük Yakıt (TL)</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        className="glass-input" 
+                        value={fuelExpense}
+                        onChange={(e) => setFuelExpense(e.target.value)}
+                        placeholder="Yakıt Gideri"
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label" style={{ color: '#f87171' }}>Motor Kira (TL)</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        className="glass-input" 
+                        value={motorLeaseExpense}
+                        onChange={(e) => setMotorLeaseExpense(e.target.value)}
+                        placeholder="Kira Gideri"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                    <button 
+                      type="submit" 
+                      className="btn btn-primary" 
+                      style={{ flex: 2 }}
+                      disabled={saving}
+                    >
+                      {saving ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
+                    </button>
+                    
+                    {selectedDay.log && (
+                      <button 
+                        type="button" 
+                        onClick={handleDeleteLog}
+                        className="btn btn-secondary" 
+                        style={{ flex: 1, backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)' }}
+                        disabled={deleting}
+                      >
+                        {deleting ? 'Siliniyor...' : 'Sil'}
+                      </button>
+                    )}
+                  </div>
+
+                </form>
               </div>
-            </form>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center', color: 'var(--text-muted)', padding: '1rem 0' }}>
+                <span style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>👈</span>
+                <p style={{ fontSize: '0.9rem' }}>Çalışma saati, paket sayısı ve gider girmek için soldaki takvimden bir gün seçin.</p>
+              </div>
+            )}
           </div>
 
           {/* Mutabakat Header Metadata Form */}
@@ -249,35 +540,9 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
               </div>
             </div>
           </div>
-
-          {/* Package Breakdown */}
-          <div className="glass-card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1.25rem', color: 'var(--primary)' }}>
-              📦 Paket Dağılım Detayı (Bu Ay)
-            </h3>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.9rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Normal Paketler (Market + Yemek 0-4 Km):</span>
-                <span style={{ fontWeight: 600 }}>{results.totalMarketPackages} Paket</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Yemek (4-6 Km - +25 TL):</span>
-                <span style={{ fontWeight: 600 }}>{results.totalFood4_6} Paket</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>Yemek (+6 Km - +35 TL):</span>
-                <span style={{ fontWeight: 600 }}>{results.totalFood6plus} Paket</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: '0.75rem', fontWeight: 700 }}>
-                <span>Toplam Paket Sayısı:</span>
-                <span>{results.totalPackages} Paket</span>
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* Right Column: Simulated Official Mutabakat Invoice */}
+        {/* Right Column: Simulated Official Mutabakat Invoice & Flat Premiums */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           
           <div className="glass-card" style={{ padding: '2rem 1.5rem', background: '#ffffff', color: '#111827', borderRadius: '12px', border: '1px solid #e5e7eb', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
@@ -508,6 +773,35 @@ export default function Dashboard({ session, selectedCourier, logs = [], onRefre
             </div>
           </div>
           
+          {/* Monthly extra flat premium entry */}
+          <div className="glass-card" style={{ padding: '1.25rem 1.5rem' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--primary)' }}>
+              🕒 Aylık Diğer Ekstra Prim Girişi
+            </h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+              June mutabakatındaki gibi diğer hak ediş dışı primleri buraya ekleyebilirsiniz:
+            </p>
+            <form onSubmit={handleSaveExtraData} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input 
+                type="number" 
+                step="0.01"
+                className="glass-input"
+                value={extraPremiumsInput}
+                onChange={(e) => setExtraPremiumsInput(e.target.value)}
+                placeholder="Örn: 500"
+                style={{ flex: 1 }}
+              />
+              <button type="submit" className="btn btn-primary" disabled={savingData} style={{ padding: '0.45rem 1.25rem' }}>
+                {savingData ? '...' : 'Kaydet'}
+              </button>
+            </form>
+            {message && (
+              <span style={{ fontSize: '0.8rem', color: 'var(--success)', display: 'block', marginTop: '0.5rem' }}>
+                {message}
+              </span>
+            )}
+          </div>
+
           <div style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
             Yukarıdaki döküm kuryenin aylık verileriyle kuruşu kuruşuna fatura eşleşmesi sunar.
           </div>

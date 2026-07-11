@@ -81,13 +81,7 @@ export default function Layout({
                 onClick={() => setCurrentTab('dashboard')}
                 className={`nav-btn ${currentTab === 'dashboard' ? 'active' : ''}`}
               >
-                Gösterge Paneli
-              </button>
-              <button 
-                onClick={() => setCurrentTab('calendar')}
-                className={`nav-btn ${currentTab === 'calendar' ? 'active' : ''}`}
-              >
-                Çalışma Takvimi
+                Çalışma Takvimi & Mutabakat
               </button>
               <button 
                 onClick={() => setCurrentTab('settings')}
